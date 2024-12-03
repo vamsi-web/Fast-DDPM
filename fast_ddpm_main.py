@@ -123,7 +123,7 @@ def parse_args_and_config():
                 os.makedirs(args.log_path)
 
             with open(os.path.join(args.log_path, "config.yml"), "w") as f:
-                yml.dump(new_config, f, default_flow_style=False)
+                yaml.dump(new_config, f, default_flow_style=False)
 
         new_config.tb_logger = tb.SummaryWriter(log_dir=tb_path)
         # setup logger
