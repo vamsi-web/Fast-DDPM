@@ -6,57 +6,69 @@ from PIL import Image
 import glob
 import random
 
+# Supported image extensions
 IMG_EXTENSIONS = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG', '.bmp', '.BMP', '.mat']
 
 def is_image_file(filename):
+    """
+    Check if a file is an image based on its extension.
+    """
     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
-# Function to get image paths for PET data
-def get_paths_from_images(path):
+def get_valid_paths_from_images(path):
     """
-    Get paths for PET images (size: 128x256) containing both LPET and FDPET.
-    """
-    assert os.path.isdir(path), '{:s} is not a valid directory'.format(path)
-    
-    pet_images = glob.glob(path + "**/*.png", recursive=True)
-    assert pet_images, '{:s} has no valid PET image files'.format(path)
-    return sorted(pet_images)
-
-# Function to split 128x256 PET images into LPET and FDPET
-def split_pet_image(pet_image):
-    """
-    Split a 128x256 PET image into LPET (left half) and FDPET (right half).
+    Get valid image paths from the given directory.
     Args:
-        pet_image (PIL.Image): The combined PET image.
+        path (str): Directory containing images.
     Returns:
-        tuple: LPET image and FDPET image as PIL.Image objects.
+        list: List of valid image file paths.
     """
-    width, height = pet_image.size  # Expecting 256x128
-    assert width == 256 and height == 128, "Image must be 128x256 in size."
-    
-    # Crop left (LPET) and right (FDPET) halves
-    lpet = pet_image.crop((0, 0, 128, 128))   # Left half
-    fdpet = pet_image.crop((128, 0, 256, 128))  # Right half
-    return lpet, fdpet
+    assert os.path.isdir(path), f"{path} is not a valid directory"
+    images = []
+    for dirpath, _, fnames in os.walk(path):
+        fnames = sorted([f for f in fnames if is_image_file(f)])
+        images.extend(os.path.join(dirpath, f) for f in fnames)
+    assert images, f"No valid images found in {path}"
+    return images
 
-# Transform images to NumPy format
+def get_valid_paths_from_test_images(path):
+    """
+    Get valid test image paths from the given directory, excluding invalid files.
+    Args:
+        path (str): Directory containing test images.
+    Returns:
+        list: List of valid test image file paths.
+    """
+    assert os.path.isdir(path), f"{path} is not a valid directory"
+    images = []
+    for dirpath, _, fnames in os.walk(path):
+        fnames = sorted([f for f in fnames if is_image_file(f)])
+        images.extend(os.path.join(dirpath, f) for f in fnames)
+    assert images, f"No valid test images found in {path}"
+    return images
+
 def transform2numpy(img):
+    """
+    Convert an image to a NumPy array and normalize to [0, 1].
+    """
     img = np.array(img)
-    img = img.astype(np.float32) / 255.  # Normalize to [0, 1]
+    img = img.astype(np.float32) / 255.0  # Normalize to [0, 1]
     if img.ndim == 2:
         img = np.expand_dims(img, axis=2)
-    # Handle 3+ channel images, keep only the first 3 channels
+    # Handle images with more than 3 channels
     if img.shape[2] > 3:
         img = img[:, :, :3]
     return img
 
-# Convert to tensor and normalize to a specified range
 def transform2tensor(img, min_max=(0, 1)):
+    """
+    Convert a NumPy array to a PyTorch tensor and normalize to a specified range.
+    """
     img = torch.from_numpy(np.ascontiguousarray(np.transpose(img, (2, 0, 1)))).float()
     img = img * (min_max[1] - min_max[0]) + min_max[0]
     return img
 
-# Apply augmentations
+# Data augmentation and transformations
 totensor = torchvision.transforms.ToTensor()
 hflip = torchvision.transforms.RandomHorizontalFlip()
 Resize = torchvision.transforms.Resize((128, 128), antialias=True)
@@ -64,6 +76,12 @@ Resize = torchvision.transforms.Resize((128, 128), antialias=True)
 def transform_augment(img_list, split='val', min_max=(-1, 1)):
     """
     Apply transformations and augmentations to a list of images.
+    Args:
+        img_list (list): List of images to transform.
+        split (str): Dataset split ('train' or 'val').
+        min_max (tuple): Range for normalization.
+    Returns:
+        list: Transformed images.
     """
     imgs = [totensor(img) for img in img_list]
     if split == 'train':
@@ -72,45 +90,3 @@ def transform_augment(img_list, split='val', min_max=(-1, 1)):
         imgs = torch.unbind(imgs, dim=0)
     ret_img = [img * (min_max[1] - min_max[0]) + min_max[0] for img in imgs]
     return ret_img
-
-# Dataset loader for PET images
-class PETDataset(torch.utils.data.Dataset):
-    def __init__(self, dataroot, img_size=128, split='train', data_len=-1):
-        """
-        Initialize the dataset for PET images.
-        Args:
-            dataroot (str): Root directory containing PET images.
-            img_size (int): Target size for resized images.
-            split (str): 'train' or 'val' split.
-            data_len (int): Number of images to use (-1 for all images).
-        """
-        self.img_size = img_size
-        self.split = split
-        self.pet_paths = get_paths_from_images(dataroot)
-        self.data_len = len(self.pet_paths) if data_len == -1 else data_len
-
-    def __len__(self):
-        return self.data_len
-
-    def __getitem__(self, index):
-        """
-        Get a single sample from the dataset.
-        Args:
-            index (int): Index of the image.
-        Returns:
-            dict: Dictionary containing LPET, FDPET, and metadata.
-        """
-        pet_image = Image.open(self.pet_paths[index]).convert("L")  # Load grayscale image
-        lpet, fdpet = split_pet_image(pet_image)  # Split into LPET and FDPET
-
-        # Resize images
-        lpet = lpet.resize((self.img_size, self.img_size))
-        fdpet = fdpet.resize((self.img_size, self.img_size))
-
-        # Apply augmentations and transformations
-        lpet, fdpet = transform_augment([lpet, fdpet], split=self.split, min_max=(-1, 1))
-
-        # Extract metadata
-        case_name = os.path.basename(self.pet_paths[index]).split('.')[0]
-
-        return {'LPET': lpet, 'FDPET': fdpet, 'case_name': case_name}
