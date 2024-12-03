@@ -31,6 +31,19 @@ def get_valid_paths_from_images(path):
     assert images, f"No valid images found in {path}"
     return images
 
+def get_paths_from_images(path):
+    """
+    Get all valid image paths in a given directory.
+    Args:
+        path (str): The root directory containing images.
+    Returns:
+        list: Sorted list of image file paths.
+    """
+    assert os.path.isdir(path), f"{path} is not a valid directory"
+    images = glob.glob(os.path.join(path, "**", "*.png"), recursive=True)
+    assert images, f"No valid image files found in {path}"
+    return sorted(images)
+
 def get_valid_paths_from_test_images(path):
     """
     Get valid test image paths from the given directory, excluding invalid files.
