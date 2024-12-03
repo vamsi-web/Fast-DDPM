@@ -18,6 +18,7 @@ from datasets import data_transform, inverse_data_transform
 from datasets.pmub import PMUB
 from datasets.LDFDCT import LDFDCT
 from datasets.BRATS import BRATS
+from datasets.PET import PETDataset
 from functions.ckpt_util import get_ckpt_path
 from skimage.metrics import structural_similarity as ssim
 import torchvision.utils as tvu
