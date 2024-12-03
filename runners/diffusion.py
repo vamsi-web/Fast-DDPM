@@ -40,19 +40,9 @@ def get_beta_schedule(beta_schedule, *, beta_start, beta_end, num_diffusion_time
         return (np.exp(x) - np.exp(-x)) / (np.exp(x) + np.exp(-x))
 
     if beta_schedule == "quad":
-        betas = (
-            np.linspace(
-                beta_start ** 0.5,
-                beta_end ** 0.5,
-                num_diffusion_timesteps,
-                dtype=np.float64,
-            )
-            ** 2
-        )
+        betas = (np.linspace(beta_start ** 0.5,beta_end ** 0.5,num_diffusion_timesteps,dtype=np.float64)** 2)
     elif beta_schedule == "linear":
-        betas = np.linspace(
-            beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
-        )
+        betas = np.linspace(beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64)
     elif beta_schedule == "sigmoid":
         betas = np.linspace(-6, 6, num_diffusion_timesteps)
         betas = sigmoid(betas) * (beta_end - beta_start) + beta_start
