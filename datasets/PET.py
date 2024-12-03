@@ -31,7 +31,7 @@ class PETDataset(Dataset):
             raise KeyError(f"'image' key not found in {mat_path}")
 
         # Assuming the data is stored under the key 'image'
-        img = mat_data['image']  # Replace 'image' with the appropriate key if different
+        img = mat_data['img']  # Replace 'image' with the appropriate key if different
         if img.ndim == 2:  # Ensure it's 3D (H, W, C)
             img = np.expand_dims(img, axis=-1)
 
