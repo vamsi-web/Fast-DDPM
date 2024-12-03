@@ -241,117 +241,117 @@ class Diffusion(object):
     """
     Training Fast-DDPM for tasks such as image translation, denoising, and specifically adapted for PET images.
     """
-    args, config = self.args, self.config
-    tb_logger = self.config.tb_logger
+        args, config = self.args, self.config
+        tb_logger = self.config.tb_logger
 
-    # Load the appropriate dataset
-    if self.args.dataset == 'LDFDCT':
-        # LDFDCT for CT image denoising
-        dataset = LDFDCT(self.config.data.train_dataroot, self.config.data.image_size, split='train')
-        print('Start training your Fast-DDPM model on LDFDCT dataset.')
-    elif self.args.dataset == 'BRATS':
-        # BRATS for brain image translation
-        dataset = BRATS(self.config.data.train_dataroot, self.config.data.image_size, split='train')
-        print('Start training your Fast-DDPM model on BRATS dataset.')
-    elif self.args.dataset == 'PET':
-        # PET dataset for low-dose to full-dose translation
-        dataset = PETDataset(self.config.data.train_dataroot, self.config.data.image_size, split='train')
-        print('Start training your Fast-DDPM model on PET dataset.')
-    else:
-        raise Exception(f"Dataset {self.args.dataset} is not supported.")
+        # Load the appropriate dataset
+        if self.args.dataset == 'LDFDCT':
+            # LDFDCT for CT image denoising
+            dataset = LDFDCT(self.config.data.train_dataroot, self.config.data.image_size, split='train')
+            print('Start training your Fast-DDPM model on LDFDCT dataset.')
+        elif self.args.dataset == 'BRATS':
+            # BRATS for brain image translation
+            dataset = BRATS(self.config.data.train_dataroot, self.config.data.image_size, split='train')
+            print('Start training your Fast-DDPM model on BRATS dataset.')
+        elif self.args.dataset == 'PET':
+            # PET dataset for low-dose to full-dose translation
+            dataset = PETDataset(self.config.data.train_dataroot, self.config.data.image_size, split='train')
+            print('Start training your Fast-DDPM model on PET dataset.')
+        else:
+            raise Exception(f"Dataset {self.args.dataset} is not supported.")
 
-    print(f'The scheduler sampling type is {self.args.scheduler_type}. '
-          f'The number of involved time steps is {self.args.timesteps} out of 1000.')
+        print(f'The scheduler sampling type is {self.args.scheduler_type}. '
+              f'The number of involved time steps is {self.args.timesteps} out of 1000.')
 
-    # Data loader
-    train_loader = data.DataLoader(
-        dataset,
-        batch_size=config.training.batch_size,
-        shuffle=True,
-        num_workers=config.data.num_workers,
-        pin_memory=True
-    )
+        # Data loader
+        train_loader = data.DataLoader(
+            dataset,
+            batch_size=config.training.batch_size,
+            shuffle=True,
+            num_workers=config.data.num_workers,
+            pin_memory=True
+        )
 
-    # Initialize the model
-    model = Model(config)
-    model = model.to(self.device)
-    model = torch.nn.DataParallel(model)
+        # Initialize the model
+        model = Model(config)
+        model = model.to(self.device)
+        model = torch.nn.DataParallel(model)
 
-    # Optimizer and EMA helper
-    optimizer = get_optimizer(self.config, model.parameters())
-    if self.config.model.ema:
-        ema_helper = EMAHelper(mu=self.config.model.ema_rate)
-        ema_helper.register(model)
-    else:
-        ema_helper = None
-
-    # Resume training if needed
-    start_epoch, step = 0, 0
-    if self.args.resume_training:
-        states = torch.load(os.path.join(self.args.log_path, "ckpt.pth"))
-        model.load_state_dict(states[0])
-        optimizer.load_state_dict(states[1])
-        start_epoch = states[2]
-        step = states[3]
+        # Optimizer and EMA helper
+        optimizer = get_optimizer(self.config, model.parameters())
         if self.config.model.ema:
-            ema_helper.load_state_dict(states[4])
+            ema_helper = EMAHelper(mu=self.config.model.ema_rate)
+            ema_helper.register(model)
+        else:
+            ema_helper = None
 
-    # Training loop
-    for epoch in range(start_epoch, config.training.n_epochs):
-        for i, batch in enumerate(train_loader):
-            n = batch['LPET'].size(0)
-            model.train()
-            step += 1
-
-            # Load LPET and FDPET
-            x_lpet = batch['LPET'].to(self.device)
-            x_fdpet = batch['FDPET'].to(self.device)
-
-            e = torch.randn_like(x_fdpet)  # Noise
-            b = self.betas  # Diffusion betas
-
-            # Select timesteps for the scheduler
-            if self.args.scheduler_type == 'uniform':
-                skip = self.num_timesteps // self.args.timesteps
-                t_intervals = torch.arange(-1, self.num_timesteps, skip)
-                t_intervals[0] = 0
-            elif self.args.scheduler_type == 'non-uniform':
-                t_intervals = torch.tensor([0, 199, 399, 599, 699, 799, 849, 899, 949, 999])
-            else:
-                raise Exception("The scheduler type must be either uniform or non-uniform.")
-
-            # Antithetic sampling
-            idx_1 = torch.randint(0, len(t_intervals), size=(n // 2 + 1,))
-            idx_2 = len(t_intervals) - idx_1 - 1
-            idx = torch.cat([idx_1, idx_2], dim=0)[:n]
-            t = t_intervals[idx].to(self.device)
-
-            # Compute loss
-            loss = loss_registry[config.model.type](model, x_lpet, x_fdpet, t, e, b)
-
-            # Log the loss
-            tb_logger.add_scalar("loss", loss.item(), global_step=step)
-            logging.info(f"Epoch [{epoch+1}/{config.training.n_epochs}], Step: {step}, Loss: {loss.item()}")
-
-            # Backpropagation and optimizer step
-            optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), config.optim.grad_clip)
-            optimizer.step()
-
-            # Update EMA
+        # Resume training if needed
+        start_epoch, step = 0, 0
+        if self.args.resume_training:
+            states = torch.load(os.path.join(self.args.log_path, "ckpt.pth"))
+            model.load_state_dict(states[0])
+            optimizer.load_state_dict(states[1])
+            start_epoch = states[2]
+            step = states[3]
             if self.config.model.ema:
-                ema_helper.update(model)
+                ema_helper.load_state_dict(states[4])
 
-            # Save checkpoint
-            if step % config.training.snapshot_freq == 0 or step == 1:
-                states = [model.state_dict(), optimizer.state_dict(), epoch, step]
+        # Training loop
+        for epoch in range(start_epoch, config.training.n_epochs):
+            for i, batch in enumerate(train_loader):
+                n = batch['LPET'].size(0)
+                model.train()
+                step += 1
+
+                # Load LPET and FDPET
+                x_lpet = batch['LPET'].to(self.device)
+                x_fdpet = batch['FDPET'].to(self.device)
+
+                e = torch.randn_like(x_fdpet)  # Noise
+                b = self.betas  # Diffusion betas
+
+                # Select timesteps for the scheduler
+                if self.args.scheduler_type == 'uniform':
+                    skip = self.num_timesteps // self.args.timesteps
+                    t_intervals = torch.arange(-1, self.num_timesteps, skip)
+                    t_intervals[0] = 0
+                elif self.args.scheduler_type == 'non-uniform':
+                    t_intervals = torch.tensor([0, 199, 399, 599, 699, 799, 849, 899, 949, 999])
+                else:
+                    raise Exception("The scheduler type must be either uniform or non-uniform.")
+
+                # Antithetic sampling
+                idx_1 = torch.randint(0, len(t_intervals), size=(n // 2 + 1,))
+                idx_2 = len(t_intervals) - idx_1 - 1
+                idx = torch.cat([idx_1, idx_2], dim=0)[:n]
+                t = t_intervals[idx].to(self.device)
+
+                # Compute loss
+                loss = loss_registry[config.model.type](model, x_lpet, x_fdpet, t, e, b)
+
+                # Log the loss
+                tb_logger.add_scalar("loss", loss.item(), global_step=step)
+                logging.info(f"Epoch [{epoch+1}/{config.training.n_epochs}], Step: {step}, Loss: {loss.item()}")
+
+                # Backpropagation and optimizer step
+                optimizer.zero_grad()
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), config.optim.grad_clip)
+                optimizer.step()
+
+                # Update EMA
                 if self.config.model.ema:
-                    states.append(ema_helper.state_dict())
-                torch.save(states, os.path.join(self.args.log_path, f"ckpt_{step}.pth"))
-                torch.save(states, os.path.join(self.args.log_path, "ckpt.pth"))
+                    ema_helper.update(model)
 
-        logging.info(f"Epoch {epoch+1}/{config.training.n_epochs} completed.")
+                # Save checkpoint
+                if step % config.training.snapshot_freq == 0 or step == 1:
+                    states = [model.state_dict(), optimizer.state_dict(), epoch, step]
+                    if self.config.model.ema:
+                        states.append(ema_helper.state_dict())
+                    torch.save(states, os.path.join(self.args.log_path, f"ckpt_{step}.pth"))
+                    torch.save(states, os.path.join(self.args.log_path, "ckpt.pth"))
+
+            logging.info(f"Epoch {epoch+1}/{config.training.n_epochs} completed.")
 
     #logging.info("Training finished.")
 
