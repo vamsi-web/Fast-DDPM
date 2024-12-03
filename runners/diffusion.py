@@ -31,6 +31,26 @@ def torch2hwcuint8(x, clip=False):
     x = (x + 1.0) / 2.0
     return x
 
+class Diffusion:
+    # Existing methods...
+
+    def pet_train(self):
+        """
+        Training logic for the PET dataset.
+        """
+        logging.info("Starting training for PET dataset.")
+        # Implement PET-specific training logic here
+        pass
+
+    def pet_sample(self):
+        """
+        Sampling logic for the PET dataset.
+        """
+        logging.info("Starting sampling for PET dataset.")
+        # Implement PET-specific sampling logic here
+        pass
+
+
 
 def get_beta_schedule(beta_schedule, *, beta_start, beta_end, num_diffusion_timesteps):
     def sigmoid(x):
