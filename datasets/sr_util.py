@@ -6,7 +6,7 @@ import numpy as np
 import glob
 
 IMG_EXTENSIONS = ['.jpg', '.JPG', '.jpeg', '.JPEG',
-                  '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP']
+                  '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP', '.mat']
 
 
 def is_image_file(filename):
