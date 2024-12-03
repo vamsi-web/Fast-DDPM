@@ -238,9 +238,9 @@ class Diffusion(object):
                     torch.save(states, os.path.join(self.args.log_path, "ckpt.pth"))
 
     def pet_train(self):
-    """
-    Training Fast-DDPM for tasks such as image translation, denoising, and specifically adapted for PET images.
-    """
+        """
+        Training Fast-DDPM for tasks such as image translation, denoising, and specifically adapted for PET images.
+        """
         args, config = self.args, self.config
         tb_logger = self.config.tb_logger
 
