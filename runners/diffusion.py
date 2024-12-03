@@ -776,101 +776,101 @@ class Diffusion(object):
             else:
                 raise NotImplementedError("Sample procedeure not defined")
 
-def pet_sample(self):
-    """
-    Sampling for tasks such as image translation, denoising, and PET-specific sampling.
-    """
-    ckpt_list = self.config.sampling.ckpt_id
-    for ckpt_idx in ckpt_list:
-        self.ckpt_idx = ckpt_idx
-        model = Model(self.config)
-        print(f"Start inference on model of {ckpt_idx} steps.")
+    def pet_sample(self):
+        """
+        Sampling for tasks such as image translation, denoising, and PET-specific sampling.
+        """
+        ckpt_list = self.config.sampling.ckpt_id
+        for ckpt_idx in ckpt_list:
+            self.ckpt_idx = ckpt_idx
+            model = Model(self.config)
+            print(f"Start inference on model of {ckpt_idx} steps.")
 
-        # Load checkpoint or pretrained model
-        if not self.args.use_pretrained:
-            states = torch.load(
-                os.path.join(
-                    self.args.log_path, f"ckpt_{ckpt_idx}.pth"
-                ),
-                map_location=self.config.device,
-            )
-            model = model.to(self.device)
-            model = torch.nn.DataParallel(model)
-            model.load_state_dict(states[0], strict=True)
+            # Load checkpoint or pretrained model
+            if not self.args.use_pretrained:
+                states = torch.load(
+                    os.path.join(
+                        self.args.log_path, f"ckpt_{ckpt_idx}.pth"
+                    ),
+                    map_location=self.config.device,
+                )
+                model = model.to(self.device)
+                model = torch.nn.DataParallel(model)
+                model.load_state_dict(states[0], strict=True)
 
-            if self.config.model.ema:
-                ema_helper = EMAHelper(mu=self.config.model.ema_rate)
-                ema_helper.register(model)
-                ema_helper.load_state_dict(states[-1])
-                ema_helper.ema(model)
+                if self.config.model.ema:
+                    ema_helper = EMAHelper(mu=self.config.model.ema_rate)
+                    ema_helper.register(model)
+                    ema_helper.load_state_dict(states[-1])
+                    ema_helper.ema(model)
+                else:
+                    ema_helper = None
             else:
-                ema_helper = None
-        else:
-            # Pretrained DDPM model
-            if self.config.data.dataset == "CIFAR10":
-                name = "cifar10"
-            elif self.config.data.dataset == "LSUN":
-                name = f"lsun_{self.config.data.category}"
-            elif self.config.data.dataset == "PET":
-                name = "pet"
+                # Pretrained DDPM model
+                if self.config.data.dataset == "CIFAR10":
+                    name = "cifar10"
+                elif self.config.data.dataset == "LSUN":
+                    name = f"lsun_{self.config.data.category}"
+                elif self.config.data.dataset == "PET":
+                    name = "pet"
+                else:
+                    raise ValueError("Dataset not recognized.")
+                ckpt = get_ckpt_path(f"ema_{name}")
+                print(f"Loading checkpoint {ckpt}")
+                model.load_state_dict(torch.load(ckpt, map_location=self.device))
+                model.to(self.device)
+                model = torch.nn.DataParallel(model)
+
+            model.eval()
+
+            # Sampling logic
+            if self.args.dataset == "PET":
+                self.pet_sample(model)  # Specific method for PET sampling
+            elif self.args.fid:
+                self.sg_sample_fid(model)
+            elif self.args.interpolation:
+                self.sr_sample_interpolation(model)
+            elif self.args.sequence:
+                self.sample_sequence(model)
             else:
-                raise ValueError("Dataset not recognized.")
-            ckpt = get_ckpt_path(f"ema_{name}")
-            print(f"Loading checkpoint {ckpt}")
-            model.load_state_dict(torch.load(ckpt, map_location=self.device))
-            model.to(self.device)
-            model = torch.nn.DataParallel(model)
-
-        model.eval()
-
-        # Sampling logic
-        if self.args.dataset == "PET":
-            self.pet_sample(model)  # Specific method for PET sampling
-        elif self.args.fid:
-            self.sg_sample_fid(model)
-        elif self.args.interpolation:
-            self.sr_sample_interpolation(model)
-        elif self.args.sequence:
-            self.sample_sequence(model)
-        else:
-            raise NotImplementedError("Sample procedure not defined.")
+                raise NotImplementedError("Sample procedure not defined.")
 
 
     
-def pet_sample_fid(self, model):
+    def pet_sample_fid(self, model):
     """
     Specific sampling procedure for PET dataset.
     """
-    # Load the PET test dataset
-    dataset = PETDataset(self.config.data.sample_dataroot, self.config.data.image_size, split="test")
-    data_loader = data.DataLoader(
-        dataset,
-        batch_size=self.config.sampling.batch_size,
-        shuffle=False,
-        num_workers=self.config.data.num_workers,
-        pin_memory=True,
-    )
+        # Load the PET test dataset
+        dataset = PETDataset(self.config.data.sample_dataroot, self.config.data.image_size, split="test")
+        data_loader = data.DataLoader(
+            dataset,
+            batch_size=self.config.sampling.batch_size,
+            shuffle=False,
+            num_workers=self.config.data.num_workers,
+            pin_memory=True,
+        )
 
-    os.makedirs(self.args.image_folder, exist_ok=True)
+        os.makedirs(self.args.image_folder, exist_ok=True)
 
-    with torch.no_grad():
-        for i, batch in enumerate(data_loader):
-            lpet_images = batch["LPET"].to(self.device)  # Low-dose PET input
-            case_names = batch["case_name"]
+        with torch.no_grad():
+            for i, batch in enumerate(data_loader):
+                lpet_images = batch["LPET"].to(self.device)  # Low-dose PET input
+                case_names = batch["case_name"]
 
-            # Forward pass through the model
-            t = torch.full(
-                (lpet_images.size(0),), self.ckpt_idx, device=self.device, dtype=torch.long
-            )
-            e = torch.randn_like(lpet_images)  # Random noise
-            x_start = model(lpet_images, t, noise=e)
+                # Forward pass through the model
+                t = torch.full(
+                    (lpet_images.size(0),), self.ckpt_idx, device=self.device, dtype=torch.long
+                )
+                e = torch.randn_like(lpet_images)  # Random noise
+                x_start = model(lpet_images, t, noise=e)
 
-            # Save generated full-dose PET (FDPET) images
-            for j in range(lpet_images.size(0)):
-                generated_img = x_start[j].detach().cpu().numpy()
-                save_path = os.path.join(self.args.image_folder, f"{case_names[j]}_fdpet.png")
-                save_image(generated_img, save_path)
-                print(f"Saved FDPET image to {save_path}")
+                # Save generated full-dose PET (FDPET) images
+                for j in range(lpet_images.size(0)):
+                    generated_img = x_start[j].detach().cpu().numpy()
+                    save_path = os.path.join(self.args.image_folder, f"{case_names[j]}_fdpet.png")
+                    save_image(generated_img, save_path)
+                    print(f"Saved FDPET image to {save_path}")
 
                 
     def sr_sample_fid(self, model):
