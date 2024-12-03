@@ -1,10 +1,3 @@
-import os
-import scipy.io as sio
-import numpy as np
-import torch
-from torch.utils.data import Dataset
-import torchvision.transforms as transforms
-
 class PETDataset(Dataset):
     def __init__(self, dataroot, img_size=128, split='train'):
         """
@@ -15,30 +8,32 @@ class PETDataset(Dataset):
         """
         self.img_size = img_size
         self.split = split
-        self.file_paths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.mat')]
+        self.image_paths = [os.path.join(dataroot, f) for f in os.listdir(dataroot) if f.endswith('.mat')]
 
-        if not self.file_paths:
+        if not self.image_paths:
             raise ValueError(f"No .mat files found in directory: {dataroot}")
 
     def __len__(self):
-        return len(self.file_paths)
+        return len(self.image_paths)
 
     def __getitem__(self, index):
-        mat_path = self.file_paths[index]
+        mat_path = self.image_paths[index]
         mat_data = sio.loadmat(mat_path)  # Load .mat file
-        #if 'image' not in mat_data:
-            #raise KeyError(f"'image' key not found in {mat_path}")
+        if 'image' not in mat_data:
+            raise KeyError(f"'image' key not found in {mat_path}")
 
         # Assuming the data is stored under the key 'image'
-        img = mat_data['img']  # Replace 'image' with the appropriate key if different
+        img = mat_data['image']  # Replace 'image' with the appropriate key if different
         if img.ndim == 2:  # Ensure it's 3D (H, W, C)
             img = np.expand_dims(img, axis=-1)
 
-        # Split the image into LPET and FDPET
+        # Fixing the shape for images of size (1, 256, 128)
+        # Reshaping or resizing the image to ensure it has the correct shape (H, 256, 1)
         h, w, c = img.shape
-        if w != 256 or c != 1:
-            raise ValueError(f"Expected image shape (H, 256, 1), but got {img.shape}")
+        if w == 256 and c == 1 and h != 128:
+            img = np.resize(img, (128, 256, 1))  # Resize to correct height (128)
 
+        # Split the image into LPET and FDPET
         lpet = img[:, :128]  # Left half (LPET)
         fdpet = img[:, 128:]  # Right half (FDPET)
 
