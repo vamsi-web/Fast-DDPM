@@ -229,7 +229,7 @@ def main():
                 runner.sr_sample()
             elif args.dataset in ['LDFDCT', 'BRATS']:
                 runner.sg_sample()
-            elif args.dataset == 'LDFDPET':
+            elif args.dataset == 'PET':
                 runner.pet_sample()  # Add this for PET sampling
             else:
                 raise Exception("This script only supports LDFDCT, BRATS, PMUB, and PET as sampling datasets. Feel free to add your own.")
@@ -242,7 +242,7 @@ def main():
                 runner.sr_train()
             elif args.dataset in ['LDFDCT', 'BRATS']:
                 runner.sg_train()
-            elif args.dataset == 'LDFDPET':
+            elif args.dataset == 'PET':
                 runner.pet_train()  # Add this for PET training
             else:
                 raise Exception("This script only supports LDFDCT, BRATS, PMUB, and PET as training datasets. Feel free to add your own.")
