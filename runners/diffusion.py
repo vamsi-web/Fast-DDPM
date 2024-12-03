@@ -83,7 +83,7 @@ class Diffusion(object):
                 else torch.device("cpu")
             )
         self.device = device
-        self.betas = torch.linspace(self.beta_start, self.beta_end, self.num_timesteps).float().to(self.device)
+        
         self.model_var_type = config.model.var_type
         betas = get_beta_schedule(
             beta_schedule=config.diffusion.beta_schedule,
@@ -91,7 +91,8 @@ class Diffusion(object):
             beta_end=config.diffusion.beta_end,
             num_diffusion_timesteps=config.diffusion.num_diffusion_timesteps,
         )
-        betas = self.betas = torch.from_numpy(betas).float().to(self.device)
+        #self.betas = torch.from_numpy(betas).float().to(self.device)
+        self.betas = torch.linspace(self.beta_start, self.beta_end, self.num_timesteps).float().to(self.device)
         self.num_timesteps = betas.shape[0]
 
         alphas = 1.0 - betas
