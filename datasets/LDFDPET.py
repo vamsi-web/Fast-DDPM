@@ -4,7 +4,7 @@ from torch.utils.data import Dataset
 import torch
 import random
 from .sr_util import (
-    get_valid_paths_from_images,  # Update these helpers to scan PET-specific directories
+    get_paths_from_images,  # Update these helpers to scan PET-specific directories
     transform_augment       # Adjust augmentations to fit PET data requirements
 )
 
