@@ -85,14 +85,14 @@ class Diffusion(object):
         self.device = device
         
         self.model_var_type = config.model.var_type
-       #betas = get_beta_schedule(beta_schedule=config.diffusion.beta_schedule,beta_start=config.diffusion.beta_start,beta_end=config.diffusion.beta_end,num_diffusion_timesteps=config.diffusion.num_diffusion_timesteps,)
+        #betas = get_beta_schedule(beta_schedule=config.diffusion.beta_schedule,beta_start=config.diffusion.beta_start,beta_end=config.diffusion.beta_end,num_diffusion_timesteps=config.diffusion.num_diffusion_timesteps,)
         # Initialize diffusion-related parameters from config
         self.beta_start = config.diffusion.beta_start
         self.beta_end = config.diffusion.beta_end
         self.num_timesteps = config.diffusion.num_diffusion_timesteps
         #self.betas = torch.from_numpy(betas).float().to(self.device)
         self.betas = torch.linspace(self.beta_start, self.beta_end, self.num_timesteps).float().to(self.device)
-        self.num_timesteps = betas.shape[0]
+        #self.num_timesteps = betas.shape[0]
 
         alphas = 1.0 - betas
         alphas_cumprod = alphas.cumprod(dim=0)
