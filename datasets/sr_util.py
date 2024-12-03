@@ -1,162 +1,116 @@
 import os
 import torch
 import torchvision
-import random
 import numpy as np
+from PIL import Image
 import glob
+import random
 
-IMG_EXTENSIONS = ['.jpg', '.JPG', '.jpeg', '.JPEG',
-                  '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP', '.mat']
-
+IMG_EXTENSIONS = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG', '.bmp', '.BMP', '.mat']
 
 def is_image_file(filename):
     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
-
-def extract_number(filename):
-    number = int(filename.split('_')[1].split('.')[0])
-    return number
-
-# LDFDCT
+# Function to get image paths for PET data
 def get_paths_from_images(path):
+    """
+    Get paths for PET images (size: 128x256) containing both LPET and FDPET.
+    """
     assert os.path.isdir(path), '{:s} is not a valid directory'.format(path)
+    
+    pet_images = glob.glob(path + "**/*.png", recursive=True)
+    assert pet_images, '{:s} has no valid PET image files'.format(path)
+    return sorted(pet_images)
 
-    ld_images = glob.glob(path + "**/**/*ld.png", recursive=True)
-    fd_images = glob.glob(path + "**/**/*fd.png", recursive=True)
+# Function to split 128x256 PET images into LPET and FDPET
+def split_pet_image(pet_image):
+    """
+    Split a 128x256 PET image into LPET (left half) and FDPET (right half).
+    Args:
+        pet_image (PIL.Image): The combined PET image.
+    Returns:
+        tuple: LPET image and FDPET image as PIL.Image objects.
+    """
+    width, height = pet_image.size  # Expecting 256x128
+    assert width == 256 and height == 128, "Image must be 128x256 in size."
+    
+    # Crop left (LPET) and right (FDPET) halves
+    lpet = pet_image.crop((0, 0, 128, 128))   # Left half
+    fdpet = pet_image.crop((128, 0, 256, 128))  # Right half
+    return lpet, fdpet
 
-    assert ld_images, '{:s} has no valid ld image file'.format(path)
-    assert fd_images, '{:s} has no valid fd image file'.format(path)
-    assert len(ld_images) == len(fd_images), 'Low Dose images nd Full Dose images are not paired!'
-    return sorted(ld_images), sorted(fd_images)
-
-# Single SR
-def get_paths_from_single_sr_images(path):
-    assert os.path.isdir(path), '{:s} is not a valid directory'.format(path)
-
-    lr_images = glob.glob(path + "**/**/*lr.png", recursive=True)
-    hr_images = glob.glob(path + "**/**/*hr.png", recursive=True)
-
-    assert lr_images, '{:s} has no valid lr image file'.format(path)
-    assert hr_images, '{:s} has no valid hr image file'.format(path)
-    assert len(lr_images) == len(hr_images), 'Low Dose images nd Full Dose images are not paired!'
-    return sorted(lr_images), sorted(hr_images)
-
-
-def get_paths_from_npys(path_data, path_gt):
-    assert os.path.isdir(path_data), '{:s} is not a valid directory'.format(path_data)
-    assert os.path.isdir(path_gt), '{:s} is not a valid directory'.format(path_gt)
-
-    data_npy = glob.glob(path_data + "*.npy")
-    gt_npy = glob.glob(path_gt + "*.npy")
-
-    assert data_npy, '{:s} has no valid data npy file'.format(path_data)
-    assert gt_npy, '{:s} has no valid GT npy file'.format(path_gt)
-    assert len(data_npy) == len(gt_npy), 'Low Dose images nd Full Dose images are not paired!'
-    return sorted(data_npy), sorted(gt_npy)
-
-
-# Delete head and tail for train and val
-def get_valid_paths_from_images(path):
-    assert os.path.isdir(path), '{:s} is not a valid directory'.format(path)
-    images = []
-
-    for dirpath, folder_path, fnames in sorted(os.walk(path)):
-        
-        filtered_fnames = [fname for fname in fnames if fname.endswith('.png') and not fname.startswith('.')]
-        fnames = filtered_fnames
-
-        fnames = sorted(fnames, key=extract_number)
-        new_fnames = fnames[1:-1]
-
-        for fname in new_fnames:
-            if is_image_file(fname):
-                img_path = os.path.join(dirpath, fname)
-                images.append(img_path)
-
-    assert images, '{:s} has no valid image file'.format(path)
-    return images
-
-
-# Delete tail for test
-def get_valid_paths_from_test_images(path):
-    assert os.path.isdir(path), '{:s} is not a valid directory'.format(path)
-    images = []
-
-    for dirpath, _, fnames in sorted(os.walk(path)):
-        filtered_fnames = [fname for fname in fnames if not fname.startswith('.')]
-        fnames = filtered_fnames
-
-        fnames = sorted(fnames, key=extract_number)
-        new_fnames = fnames[:-1]
-
-        for fname in new_fnames:
-            if is_image_file(fname):
-                img_path = os.path.join(dirpath, fname)
-                images.append(img_path)
-                
-    assert images, '{:s} has no valid image file'.format(path)
-    return images
-
-
-def augment(img_list, hflip=True, rot=True, split='val'):
-    # horizontal flip OR rotate
-    hflip = hflip and (split == 'train' and random.random() < 0.5)
-    vflip = rot and (split == 'train' and random.random() < 0.5)
-    rot90 = rot and (split == 'train' and random.random() < 0.5)
-
-    def _augment(img):
-        if hflip:
-            img = img[:, ::-1, :]
-        if vflip:
-            img = img[::-1, :, :]
-        if rot90:
-            img = img.transpose(1, 0, 2)
-        return img
-
-    return [_augment(img) for img in img_list]
-
-
+# Transform images to NumPy format
 def transform2numpy(img):
     img = np.array(img)
-    img = img.astype(np.float32) / 255.
+    img = img.astype(np.float32) / 255.  # Normalize to [0, 1]
     if img.ndim == 2:
         img = np.expand_dims(img, axis=2)
-    # some images have 4 channels
+    # Handle 3+ channel images, keep only the first 3 channels
     if img.shape[2] > 3:
         img = img[:, :, :3]
     return img
 
-
+# Convert to tensor and normalize to a specified range
 def transform2tensor(img, min_max=(0, 1)):
-    # HWC to CHW
-    img = torch.from_numpy(np.ascontiguousarray(
-        np.transpose(img, (2, 0, 1)))).float()
-    # to range min_max
-    img = img*(min_max[1] - min_max[0]) + min_max[0]
+    img = torch.from_numpy(np.ascontiguousarray(np.transpose(img, (2, 0, 1)))).float()
+    img = img * (min_max[1] - min_max[0]) + min_max[0]
     return img
 
-
+# Apply augmentations
 totensor = torchvision.transforms.ToTensor()
 hflip = torchvision.transforms.RandomHorizontalFlip()
-Resize = torchvision.transforms.Resize((224, 224), antialias=True)
-def transform_augment(img_list, split='val', min_max=(0, 1)):    
+Resize = torchvision.transforms.Resize((128, 128), antialias=True)
+
+def transform_augment(img_list, split='val', min_max=(-1, 1)):
+    """
+    Apply transformations and augmentations to a list of images.
+    """
     imgs = [totensor(img) for img in img_list]
     if split == 'train':
         imgs = torch.stack(imgs, 0)
         imgs = hflip(imgs)
         imgs = torch.unbind(imgs, dim=0)
-
     ret_img = [img * (min_max[1] - min_max[0]) + min_max[0] for img in imgs]
     return ret_img
 
+# Dataset loader for PET images
+class PETDataset(torch.utils.data.Dataset):
+    def __init__(self, dataroot, img_size=128, split='train', data_len=-1):
+        """
+        Initialize the dataset for PET images.
+        Args:
+            dataroot (str): Root directory containing PET images.
+            img_size (int): Target size for resized images.
+            split (str): 'train' or 'val' split.
+            data_len (int): Number of images to use (-1 for all images).
+        """
+        self.img_size = img_size
+        self.split = split
+        self.pet_paths = get_paths_from_images(dataroot)
+        self.data_len = len(self.pet_paths) if data_len == -1 else data_len
 
-def brats_transform_augment(img_list, split='val'):
-    imgs = [totensor(img) for img in img_list]
-    # imgs = [Resize(img) for img in imgs_tlist]
-    # if split == 'train':
-    #     imgs = torch.stack(imgs, 0)
-    #     imgs = hflip(imgs)
-    #     imgs = torch.unbind(imgs, dim=0)
-    ret_img = [img.clamp(-1., 1.) for img in imgs]
-        
-    return ret_img
+    def __len__(self):
+        return self.data_len
+
+    def __getitem__(self, index):
+        """
+        Get a single sample from the dataset.
+        Args:
+            index (int): Index of the image.
+        Returns:
+            dict: Dictionary containing LPET, FDPET, and metadata.
+        """
+        pet_image = Image.open(self.pet_paths[index]).convert("L")  # Load grayscale image
+        lpet, fdpet = split_pet_image(pet_image)  # Split into LPET and FDPET
+
+        # Resize images
+        lpet = lpet.resize((self.img_size, self.img_size))
+        fdpet = fdpet.resize((self.img_size, self.img_size))
+
+        # Apply augmentations and transformations
+        lpet, fdpet = transform_augment([lpet, fdpet], split=self.split, min_max=(-1, 1))
+
+        # Extract metadata
+        case_name = os.path.basename(self.pet_paths[index]).split('.')[0]
+
+        return {'LPET': lpet, 'FDPET': fdpet, 'case_name': case_name}
