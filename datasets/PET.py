@@ -27,8 +27,8 @@ class PETDataset(Dataset):
     def __getitem__(self, index):
         mat_path = self.image_paths[index]
         mat_data = sio.loadmat(mat_path)  # Load .mat file
-        if 'image' not in mat_data:
-            raise KeyError(f"'image' key not found in {mat_path}")
+        #if 'image' not in mat_data:
+            #raise KeyError(f"'image' key not found in {mat_path}")
 
         # Assuming the data is stored under the key 'image'
         img = mat_data['img']  # Replace 'image' with the appropriate key if different
