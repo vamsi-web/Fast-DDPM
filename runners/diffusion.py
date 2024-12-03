@@ -83,7 +83,7 @@ class Diffusion(object):
                 else torch.device("cpu")
             )
         self.device = device
-
+        self.betas = torch.linspace(self.beta_start, self.beta_end, self.num_timesteps).float().to(self.device)
         self.model_var_type = config.model.var_type
         betas = get_beta_schedule(
             beta_schedule=config.diffusion.beta_schedule,
@@ -299,6 +299,7 @@ class Diffusion(object):
                 x_fdpet = batch['FDPET'].to(self.device)
 
                 e = torch.randn_like(x_fdpet)  # Noise
+                #self.betas = torch.linspace(self.beta_start, self.beta_end, self.num_timesteps).float().to(self.device)
                 b = self.betas  # Diffusion betas
 
                 # Select timesteps for the scheduler
