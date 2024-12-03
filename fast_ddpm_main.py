@@ -8,11 +8,9 @@ import os
 import torch
 import numpy as np
 import torch.utils.tensorboard as tb
-
 from runners.diffusion import Diffusion
 
 torch.set_printoptions(sci_mode=False)
-
 
 def parse_args_and_config():
     parser = argparse.ArgumentParser(description=globals()["__doc__"])
@@ -21,7 +19,7 @@ def parse_args_and_config():
         "--config", type=str, default="pmub_linear.yml", help="Path to the config file"
     )
     parser.add_argument(
-        "--dataset", type=str, default="PMUB", help="Name of dataset(LDFDCT, BRATS, PMUB)"
+        "--dataset", type=str, default="PMUB", help="Name of dataset(LDFDCT, BRATS, PMUB, PET)"
     )
     parser.add_argument("--seed", type=int, default=1244, help="Random seed")
     parser.add_argument(
@@ -100,7 +98,7 @@ def parse_args_and_config():
 
     tb_path = os.path.join(args.exp, "tensorboard", args.doc)
 
-    #   No test No sampling No resume training
+    # No test, no sampling, no resume training
     if not args.test and not args.sample:
         if not args.resume_training:
             if os.path.exists(args.log_path):
@@ -125,7 +123,7 @@ def parse_args_and_config():
                 os.makedirs(args.log_path)
 
             with open(os.path.join(args.log_path, "config.yml"), "w") as f:
-                yaml.dump(new_config, f, default_flow_style=False)
+                yml.dump(new_config, f, default_flow_style=False)
 
         new_config.tb_logger = tb.SummaryWriter(log_dir=tb_path)
         # setup logger
@@ -164,11 +162,11 @@ def parse_args_and_config():
             os.makedirs(os.path.join(args.exp, "image_samples"), exist_ok=True)
             if args.fid:
                 args.image_folder = os.path.join(
-                args.exp, "image_samples", args.doc, "images_fid")
+                    args.exp, "image_samples", args.doc, "images_fid")
             if args.interpolation:
                 args.image_folder = os.path.join(
-                args.exp, "image_samples", args.doc, "images_interpolation")
- 
+                    args.exp, "image_samples", args.doc, "images_interpolation")
+
             if not os.path.exists(args.image_folder):
                 os.makedirs(args.image_folder)
             else:
@@ -225,22 +223,30 @@ def main():
 
     try:
         runner = Diffusion(args, config)
+
         if args.sample:
-            if args.dataset=='PMUB':
+            if args.dataset == 'PMUB':
                 runner.sr_sample()
-            elif args.dataset=='LDFDCT' or args.dataset=='BRATS':
+            elif args.dataset in ['LDFDCT', 'BRATS']:
                 runner.sg_sample()
+            elif args.dataset == 'LDFDPET':
+                runner.pet_sample()  # Add this for PET sampling
             else:
-                raise Exception("This script only supports LDFDCT, BRATS and PMUB as sampling dataset. Feel free to add your own.")
+                raise Exception("This script only supports LDFDCT, BRATS, PMUB, and PET as sampling datasets. Feel free to add your own.")
+        
         elif args.test:
             runner.test()
+        
         else:
-            if args.dataset=='PMUB':
+            if args.dataset == 'PMUB':
                 runner.sr_train()
-            elif args.dataset=='LDFDCT' or args.dataset=='BRATS':
+            elif args.dataset in ['LDFDCT', 'BRATS']:
                 runner.sg_train()
+            elif args.dataset == 'LDFDPET':
+                runner.pet_train()  # Add this for PET training
             else:
-                raise Exception("This script only supports LDFDCT, BRATS and PMUB as training dataset. Feel free to add your own.")
+                raise Exception("This script only supports LDFDCT, BRATS, PMUB, and PET as training datasets. Feel free to add your own.")
+    
     except Exception:
         logging.error(traceback.format_exc())
 
