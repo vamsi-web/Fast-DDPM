@@ -1,0 +1,61 @@
+data:
+    dataset: "LDFDPET"  # Replace "PMUB" with LDFDPET
+    train_dataroot: "/kaggle/input/pet-reconstruction/train_mat/train_mat"  # Path to your LDFDPET training images
+    val_dataroot: "/kaggle/input/pet-reconstruction/test_mat/test_mat"  # Path to your LDFDPET validation images
+    sample_dataroot: "/kaggle/input/pet-reconstruction/test_mat/test_mat"  # Path to your LDFDPET test images
+    image_size: 128  # Since your images are 128x256, resize them to the desired size (e.g., 128x128 for simplicity)
+    channels: 1  # If your PET images are grayscale, channels = 1. Change to 3 if you need RGB
+    logit_transform: false  # Typically false for PET images; adjust based on model requirements
+    uniform_dequantization: false  # Set this based on your data specifics
+    gaussian_dequantization: false  # Use Gaussian if needed, else false
+    random_flip: true  # Random flip for augmentation
+    rescaled: true  # Rescale images if needed
+    num_workers: 8  # Number of workers for data loading (adjust as per your system's capacity)
+
+model:
+    type: "sr"  # Assuming Super-Resolution model, adjust if your model type is different
+    in_channels: 1  # 1 for grayscale PET, 3 if you are using RGB images
+    out_ch: 1  # Output channel for grayscale PET (1)
+    ch: 128  # Model's internal channel size
+    ch_mult: [1, 1, 2, 2, 4, 4]  # Adjust channel growth during the network layers
+    num_res_blocks: 2  # Number of residual blocks
+    attn_resolutions: [16]  # Apply attention at certain resolutions (e.g., 16x16)
+    dropout: 0.0  # Dropout, you can adjust based on model training needs
+    var_type: fixedsmall  # Variance type for the diffusion model (adjust if needed)
+    ema_rate: 0.999  # Exponential moving average rate (used for stability)
+    ema: True  # Use EMA
+    resamp_with_conv: True  # Resampling with convolution during training
+
+diffusion:
+    beta_schedule: linear  # Linear beta schedule for the diffusion model
+    beta_start: 0.0001  # Starting value of beta
+    beta_end: 0.02  # Ending value of beta
+    num_diffusion_timesteps: 1000  # Number of diffusion timesteps (you can reduce for Fast-DDPM)
+
+training:
+    batch_size: 8  # Number of images per batch during training
+    n_epochs: 10000  # Number of epochs for training
+    n_iters: 50000  # Total number of iterations
+    snapshot_freq: 100000  # Frequency of saving model snapshots (checkpoints)
+    validation_freq: 5000000000  # Frequency for validation, adjust as needed
+
+sampling:
+    batch_size: 8  # Batch size during sampling or testing
+    ckpt_id: [100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000, 900000, 1000000, 1500000, 2000000]  # Checkpoint IDs for different stages
+    last_only: True  # Whether to only use the last checkpoint for sampling
+
+sampling_inter:
+    batch_size: 59  # For intermediate sampling, if needed
+    last_only: True  # Same as above, using only the last checkpoint
+
+sampling_fid:
+    batch_size: 58  # For sampling with FID computation
+    last_only: True  # Using only the last checkpoint
+
+optim:
+    weight_decay: 0.000  # Weight decay regularization (adjust as needed)
+    optimizer: "Adam"  # Optimizer type (Adam is commonly used)
+    lr: 0.00002  # Learning rate for Adam optimizer
+    beta1: 0.9  # Adam beta1 parameter
+    amsgrad: false  # AMSGrad optimizer flag (set to true if using AMSGrad variant)
+    eps: 0.00000001  # Epsilon value for numerical stability in Adam
