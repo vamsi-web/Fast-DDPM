@@ -18,6 +18,7 @@ from datasets import data_transform, inverse_data_transform
 from datasets.pmub import PMUB
 from datasets.LDFDCT import LDFDCT
 from datasets.BRATS import BRATS
+from datasets.PET import PET
 from functions.ckpt_util import get_ckpt_path
 from skimage.metrics import structural_similarity as ssim
 import torchvision.utils as tvu
@@ -30,26 +31,6 @@ def torch2hwcuint8(x, clip=False):
         x = torch.clamp(x, -1, 1)
     x = (x + 1.0) / 2.0
     return x
-
-class Diffusion:
-    # Existing methods...
-
-    def pet_train(self):
-        """
-        Training logic for the PET dataset.
-        """
-        logging.info("Starting training for PET dataset.")
-        # Implement PET-specific training logic here
-        pass
-
-    def pet_sample(self):
-        """
-        Sampling logic for the PET dataset.
-        """
-        logging.info("Starting sampling for PET dataset.")
-        # Implement PET-specific sampling logic here
-        pass
-
 
 
 def get_beta_schedule(beta_schedule, *, beta_start, beta_end, num_diffusion_timesteps):
@@ -256,7 +237,127 @@ class Diffusion(object):
                         os.path.join(self.args.log_path, "ckpt_{}.pth".format(step)),
                     )
                     torch.save(states, os.path.join(self.args.log_path, "ckpt.pth"))
+
+    #training Fast-DDPM for PET
+    def pet_train(self):
+        args, config = self.args, self.config
+        tb_logger = self.config.tb_logger
+    
+    # Load the PET dataset
+        if self.args.dataset == 'PET':
+            # PET for PET image translation or denoising
+            dataset = PETDataset(self.config.data.train_dataroot, self.config.data.image_size, split='train')
+            print('Start training your Fast-DDPM model on PET dataset.')
+    
+        print('The scheduler sampling type is {}. The number of involved time steps is {} out of 1000.'.format(self.args.scheduler_type, self.args.timesteps))
+        
+        train_loader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=config.training.batch_size,
+            shuffle=True,
+            num_workers=config.data.num_workers,
+            pin_memory=True
+        )
+
+        model = Model(config)
+        model = model.to(self.device)
+        model = torch.nn.DataParallel(model)
+
+        optimizer = get_optimizer(self.config, model.parameters())
+
+        if self.config.model.ema:
+            ema_helper = EMAHelper(mu=self.config.model.ema_rate)
+            ema_helper.register(model)
+        else:
+            ema_helper = None
+
+        start_epoch, step = 0, 0
+        if self.args.resume_training:
+            states = torch.load(os.path.join(self.args.log_path, "ckpt.pth"))
+            model.load_state_dict(states[0])
+
+            states[1]["param_groups"][0]["eps"] = self.config.optim.eps
+            optimizer.load_state_dict(states[1])
+            start_epoch = states[2]
+            step = states[3]
+            if self.config.model.ema:
+                ema_helper.load_state_dict(states[4])
+
+        for epoch in range(start_epoch, self.config.training.n_epochs):
+            for i, x in enumerate(train_loader):
+                n = x['LPET'].size(0)
+                model.train()
+                step += 1
+
+            # Load the Low Dose (LPET) and Full Dose (FDPET) images
+            x_img = x['LPET'].to(self.device)
+            x_gt = x['FDPET'].to(self.device)
+
+            e = torch.randn_like(x_gt)
+            b = self.betas
+
+            if self.args.scheduler_type == 'uniform':
+                skip = self.num_timesteps // self.args.timesteps
+                t_intervals = torch.arange(-1, self.num_timesteps, skip)
+                t_intervals[0] = 0
+            elif self.args.scheduler_type == 'non-uniform':
+                t_intervals = torch.tensor([0, 199, 399, 599, 699, 799, 849, 899, 949, 999])
                     
+                if self.args.timesteps != 10:
+                    num_1 = int(self.args.timesteps * 0.4)
+                    num_2 = int(self.args.timesteps * 0.6)
+                    stage_1 = torch.linspace(0, 699, num_1 + 1)[:-1]
+                    stage_2 = torch.linspace(699, 999, num_2)
+                    stage_1 = torch.ceil(stage_1).long()
+                    stage_2 = torch.ceil(stage_2).long()
+                    t_intervals = torch.cat((stage_1, stage_2))
+            else:
+                raise Exception("The scheduler type is either uniform or non-uniform.")
+                    
+            # Antithetic sampling
+            idx_1 = torch.randint(0, len(t_intervals), size=(n // 2 + 1,))
+            idx_2 = len(t_intervals) - idx_1 - 1
+            idx = torch.cat([idx_1, idx_2], dim=0)[:n]
+            t = t_intervals[idx].to(self.device)
+
+            # Compute loss using the model
+            loss = loss_registry[config.model.type](model, x_img, x_gt, t, e, b)
+
+            tb_logger.add_scalar("loss", loss, global_step=step)
+
+            logging.info(f"step: {step}, loss: {loss.item()}")
+
+            optimizer.zero_grad()
+            loss.backward()
+
+            try:
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), config.optim.grad_clip
+                )
+            except Exception:
+                pass
+            optimizer.step()
+
+            if self.config.model.ema:
+                ema_helper.update(model)
+
+            if step % self.config.training.snapshot_freq == 0 or step == 1:
+                states = [
+                    model.state_dict(),
+                    optimizer.state_dict(),
+                    epoch,
+                    step,
+                ]
+                if self.config.model.ema:
+                    states.append(ema_helper.state_dict())
+
+                torch.save(
+                    states,
+                    os.path.join(self.args.log_path, f"ckpt_{step}.pth"),
+                )
+                torch.save(states, os.path.join(self.args.log_path, "ckpt.pth"))
+        
+    
 
     # Training Fast-DDPM for tasks that have two conditions: multi image super-resolution.
     def sr_train(self):
@@ -676,6 +777,10 @@ class Diffusion(object):
                 self.sample_sequence(model)
             else:
                 raise NotImplementedError("Sample procedeure not defined")
+
+
+#PET
+    
 
                 
     def sr_sample_fid(self, model):
