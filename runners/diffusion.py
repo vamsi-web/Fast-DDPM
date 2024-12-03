@@ -838,9 +838,9 @@ class Diffusion(object):
 
     
     def pet_sample_fid(self, model):
-    """
-    Specific sampling procedure for PET dataset.
-    """
+        """
+        Specific sampling procedure for PET dataset.
+        """
         # Load the PET test dataset
         dataset = PETDataset(self.config.data.sample_dataroot, self.config.data.image_size, split="test")
         data_loader = data.DataLoader(
