@@ -16,20 +16,20 @@ def parse_args_and_config():
     parser = argparse.ArgumentParser(description=globals()["__doc__"])
 
     parser.add_argument(
-        "--config", type=str, default="pmub_linear.yml", help="Path to the config file"
+        "--config", type=str, default="pet_linear.yml", help="Path to the config file"
     )
     parser.add_argument(
-        "--dataset", type=str, default="PMUB", help="Name of dataset(LDFDCT, BRATS, PMUB, PET)"
+        "--dataset", type=str, default="PET", help="Name of dataset (LDFDCT, BRATS, PMUB, PET)"
     )
     parser.add_argument("--seed", type=int, default=1244, help="Random seed")
     parser.add_argument(
-        "--exp", type=str, default="exp", help="Path for saving running related data."
+        "--exp", type=str, default="exp", help="Path for saving running-related data."
     )
     parser.add_argument(
         "--doc",
         type=str,
         default="Fast-DDPM_experiments",
-        help="A string for documentation purpose. "
+        help="A string for documentation purposes. "
         "Will be the name of the log folder.",
     )
     parser.add_argument(
@@ -69,29 +69,29 @@ def parse_args_and_config():
         "--sample_type",
         type=str,
         default="generalized",
-        help="sampling approach (generalized or ddpm_noisy)",
+        help="Sampling approach (generalized or ddpm_noisy)",
     )
     parser.add_argument(
         "--scheduler_type",
         type=str,
         default="uniform",
-        help="sample involved time steps according to (uniform or non-uniform)",
+        help="Sample involved time steps according to (uniform or non-uniform)",
     )
     parser.add_argument(
-        "--timesteps", type=int, default=100, help="number of steps involved"
+        "--timesteps", type=int, default=100, help="Number of steps involved"
     )
     parser.add_argument(
         "--eta",
         type=float,
         default=0.0,
-        help="eta used to control the variances of sigma",
+        help="Eta used to control the variances of sigma",
     )
     parser.add_argument("--sequence", action="store_true")
 
     args = parser.parse_args()
     args.log_path = os.path.join(args.exp, "logs", args.doc)
 
-    # parse config file
+    # Parse config file
     with open(os.path.join("configs", args.config), "r") as f:
         config = yaml.safe_load(f)
     new_config = dict2namespace(config)
@@ -126,10 +126,10 @@ def parse_args_and_config():
                 yaml.dump(new_config, f, default_flow_style=False)
 
         new_config.tb_logger = tb.SummaryWriter(log_dir=tb_path)
-        # setup logger
+        # Setup logger
         level = getattr(logging, args.verbose.upper(), None)
         if not isinstance(level, int):
-            raise ValueError("level {} not supported".format(args.verbose))
+            raise ValueError("Level {} not supported".format(args.verbose))
 
         handler1 = logging.StreamHandler()
         handler2 = logging.FileHandler(os.path.join(args.log_path, "stdout.txt"))
@@ -146,7 +146,7 @@ def parse_args_and_config():
     else:
         level = getattr(logging, args.verbose.upper(), None)
         if not isinstance(level, int):
-            raise ValueError("level {} not supported".format(args.verbose))
+            raise ValueError("Level {} not supported".format(args.verbose))
 
         handler1 = logging.StreamHandler()
         formatter = logging.Formatter(
@@ -188,12 +188,12 @@ def parse_args_and_config():
                         print("Output image folder exists. Program halted.")
                         sys.exit(0)
 
-    # add device
+    # Add device
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     logging.info("Using device: {}".format(device))
     new_config.device = device
 
-    # set random seed
+    # Set random seed
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     if torch.cuda.is_available():
@@ -230,7 +230,7 @@ def main():
             elif args.dataset in ['LDFDCT', 'BRATS']:
                 runner.sg_sample()
             elif args.dataset == 'PET':
-                runner.pet_sample()  # Add this for PET sampling
+                runner.pet_sample()  # Added for PET sampling
             else:
                 raise Exception("This script only supports LDFDCT, BRATS, PMUB, and PET as sampling datasets. Feel free to add your own.")
         
@@ -243,7 +243,7 @@ def main():
             elif args.dataset in ['LDFDCT', 'BRATS']:
                 runner.sg_train()
             elif args.dataset == 'PET':
-                runner.pet_train()  # Add this for PET training
+                runner.pet_train()  # Added for PET training
             else:
                 raise Exception("This script only supports LDFDCT, BRATS, PMUB, and PET as training datasets. Feel free to add your own.")
     
