@@ -831,13 +831,13 @@ class Diffusion(object):
 
 
     def pet_sample_fid(self, model):
-    """
-    Generate samples for PET dataset evaluation using FID metrics, PSNR, and SSIM.
+        """
+        Generate samples for PET dataset evaluation using FID metrics, PSNR, and SSIM.
     
-    Parameters:
-        model: nn.Module
-            The trained diffusion model used for sampling and evaluation.
-    """
+        Parameters:
+            model: nn.Module
+                The trained diffusion model used for sampling and evaluation.
+        """
         config = self.config
         os.makedirs(self.args.image_folder, exist_ok=True)
 
