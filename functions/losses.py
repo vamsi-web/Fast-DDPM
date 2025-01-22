@@ -43,11 +43,13 @@ def sr_noise_estimation_loss(model,
                           x_fw: torch.Tensor,
                           t: torch.LongTensor,
                           e: torch.Tensor,
-                          b: torch.Tensor, keepdim=False):
+                          b: torch.Tensor,beta_start: float,
+                          beta_end: float,
+                          num_timesteps: int, keepdim=False):
     # a: a_T in DDIM
     # 1-a: 1-a_T in DDIM 
     a = (1-b).cumprod(dim=0).index_select(0, t).view(-1, 1, 1, 1)
-    b = torch.linspace(self.beta_start, self.beta_end, self.num_timesteps)
+    b_generated = torch.linspace(beta_start, beta_end, num_timesteps, device=x_bw.device)
     # X_T
     x = x_md * a.sqrt() + e * (1.0 - a).sqrt()
 
