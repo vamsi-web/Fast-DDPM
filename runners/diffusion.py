@@ -94,9 +94,9 @@ class Diffusion(object):
         self.betas = torch.linspace(self.beta_start, self.beta_end, self.num_timesteps).float().to(self.device)
         #self.num_timesteps = betas.shape[0]
 
-        print(f"betas: {betas}")
+        print(f"betas: {self.betas}")
 
-        alphas = 1.0 - betas
+        alphas = 1.0 - self.betas
         alphas_cumprod = alphas.cumprod(dim=0)
         alphas_cumprod_prev = torch.cat(
             [torch.ones(1).to(device), alphas_cumprod[:-1]], dim=0
