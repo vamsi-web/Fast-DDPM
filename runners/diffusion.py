@@ -838,82 +838,82 @@ class Diffusion(object):
         model: nn.Module
             The trained diffusion model used for sampling and evaluation.
     """
-    config = self.config
-    os.makedirs(self.args.image_folder, exist_ok=True)
+        config = self.config
+        os.makedirs(self.args.image_folder, exist_ok=True)
 
-    print(f"Starting evaluation and saving images to: {self.args.image_folder}")
+        print(f"Starting evaluation and saving images to: {self.args.image_folder}")
 
-    if self.args.dataset == 'PET':
-        # Assuming PET dataset loader is available
-        sample_dataset = PETDataset(
-            self.config.data.sample_dataroot,
-            self.config.data.image_size,
-            split='test'  # Split for evaluation
-        )
-        print('Start evaluation on PET dataset.')
-    else:
-        raise ValueError("Unsupported dataset. Please use 'PET'.")
-
-    print('The inference sample type is {}. The scheduler sampling type is {}. The number of involved time steps is {} out of 1000.'.format(
-        self.args.sample_type, self.args.scheduler_type, self.args.timesteps))
-
-    sample_loader = data.DataLoader(
-        sample_dataset,
-        batch_size=config.sampling.batch_size,
-        shuffle=False,
-        num_workers=config.data.num_workers,
-        pin_memory=True
-    )
-
-    with torch.no_grad():
-        data_num = len(sample_dataset)
-        print('The length of the test set is:', data_num)
-        avg_psnr = 0.0
-        avg_ssim = 0.0
-        time_list = []
-
-        for batch_idx, sample in tqdm.tqdm(enumerate(sample_loader), desc="Generating and saving image samples."):
-            n = sample['LPET'].shape[0]
-
-            x = torch.randn(
-                n,
-                config.data.channels,
-                config.data.image_size,
-                config.data.image_size,
-                device=self.device,
+        if self.args.dataset == 'PET':
+            # Assuming PET dataset loader is available
+            sample_dataset = PETDataset(
+                self.config.data.sample_dataroot,
+                self.config.data.image_size,
+                split='test'  # Split for evaluation
             )
-            x_low_res = sample['LPET'].to(self.device)  # Low-dose PET
-            x_high_res = sample['FDPET'].to(self.device)  # Ground truth full-dose PET
-            case_names = sample['case_name']
+            print('Start evaluation on PET dataset.')
+        else:
+            raise ValueError("Unsupported dataset. Please use 'PET'.")
+
+        print('The inference sample type is {}. The scheduler sampling type is {}. The number of involved time steps is {} out of 1000.'.format(
+            self.args.sample_type, self.args.scheduler_type, self.args.timesteps))
+
+        sample_loader = data.DataLoader(
+            sample_dataset,
+            batch_size=config.sampling.batch_size,
+            shuffle=False,
+            num_workers=config.data.num_workers,
+            pin_memory=True
+        )
+
+        with torch.no_grad():
+            data_num = len(sample_dataset)
+            print('The length of the test set is:', data_num)
+            avg_psnr = 0.0
+            avg_ssim = 0.0
+            time_list = []
+
+            for batch_idx, sample in tqdm.tqdm(enumerate(sample_loader), desc="Generating and saving image samples."):
+                n = sample['LPET'].shape[0]
+
+                x = torch.randn(
+                    n,
+                    config.data.channels,
+                    config.data.image_size,
+                    config.data.image_size,
+                    device=self.device,
+                )
+                x_low_res = sample['LPET'].to(self.device)  # Low-dose PET
+                x_high_res = sample['FDPET'].to(self.device)  # Ground truth full-dose PET
+                case_names = sample['case_name']
 
             # Time sampling process
-            time_start = time.time()
-            x = self.sg_sample_image(x, x_low_res, model)
-            time_end = time.time()
+                time_start = time.time()
+                x = self.sg_sample_image(x, x_low_res, model)
+                time_end = time.time()
 
             # Transform back to original space
-            x = inverse_data_transform(config, x)
-            x_high_res = inverse_data_transform(config, x_high_res)
-            x_tensor = x
-            x_high_res_tensor = x_high_res
+                x = inverse_data_transform(config, x)
+                x_high_res = inverse_data_transform(config, x_high_res)
+                x_tensor = x
+                x_high_res_tensor = x_high_res
 
             # Save generated full-dose PET (FDPET) images
-            for j in range(x_low_res.size(0)):
-                generated_img = x_tensor[j].detach().cpu()
-                save_path = os.path.join(self.args.image_folder, f"{case_names[j]}_fdpet.png")
-                tvu.save_image(generated_img, save_path)
-                print(f"Saved FDPET image to {save_path}")
+                for j in range(x_low_res.size(0)):
+                    generated_img = x_tensor[j].detach().cpu()
+                    save_path = os.path.join(self.args.image_folder, f"{case_names[j]}_fdpet.png")
+                    tvu.save_image(generated_img, save_path)
+                    print(f"Saved FDPET image to {save_path}")
 
             # Time calculation
-            case_time = time_end - time_start
-            time_list.append(case_time)
+                case_time = time_end - time_start
+                time_list.append(case_time)
 
             # Optional: You can add PSNR/SSIM calculation here if required
-        avg_psnr = avg_psnr / data_num
-        avg_ssim = avg_ssim / data_num
-        avg_time = sum(time_list[1:-1]) / (len(time_list) - 2)  # Drop first and last for timing
-        #print(f'Average time per case: {avg_time}')
-        logging.info(f'Average: PSNR {avg_psnr}, SSIM {avg_ssim}, time {avg_time}')
+            avg_psnr = avg_psnr / data_num
+            avg_ssim = avg_ssim / data_num
+            avg_time = sum(time_list[1:-1]) / (len(time_list) - 2)  # Drop first and last for timing
+            #print(f'Average time per case: {avg_time}')
+            logging.info(f'Average: PSNR {avg_psnr}, SSIM {avg_ssim}, time {avg_time}')
    
 
                 
