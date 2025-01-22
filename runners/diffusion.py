@@ -1250,7 +1250,7 @@ class Diffusion(object):
 
         if last:
             x = x[0][-1]
-    return x
+        return x
 
 
 
