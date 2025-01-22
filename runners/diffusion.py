@@ -94,7 +94,7 @@ class Diffusion(object):
         self.betas = torch.linspace(self.beta_start, self.beta_end, self.num_timesteps).float().to(self.device)
         #self.num_timesteps = betas.shape[0]
 
-        print(f"betas: {self.betas}")
+        #print(f"betas: {self.betas}")
 
         alphas = 1.0 - self.betas
         alphas_cumprod = alphas.cumprod(dim=0)
@@ -102,7 +102,7 @@ class Diffusion(object):
             [torch.ones(1).to(device), alphas_cumprod[:-1]], dim=0
         )
         posterior_variance = (
-            betas * (1.0 - alphas_cumprod_prev) / (1.0 - alphas_cumprod)
+            self.betas * (1.0 - alphas_cumprod_prev) / (1.0 - alphas_cumprod)
         )
         if self.model_var_type == "fixedlarge":
             self.logvar = betas.log()
