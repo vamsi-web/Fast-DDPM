@@ -858,7 +858,7 @@ class Diffusion(object):
                 )
                 e = torch.randn_like(lpet_images)  # Random noise
                 x_start = model(lpet_images, t, noise=e)
-
+                b = self.betas  # Diffusion betas
                 # Save generated full-dose PET (FDPET) images
                 for j in range(lpet_images.size(0)):
                     generated_img = x_start[j].detach().cpu().numpy()
