@@ -830,41 +830,91 @@ class Diffusion(object):
                 raise NotImplementedError("Sample procedure not defined.")
 
 
-    
     def pet_sample_fid(self, model):
-        """
-        Specific sampling procedure for PET dataset.
-        """
-        # Load the PET test dataset
-        dataset = PETDataset(self.config.data.sample_dataroot, self.config.data.image_size, split="test")
-        data_loader = data.DataLoader(
-            dataset,
-            batch_size=self.config.sampling.batch_size,
-            shuffle=False,
-            num_workers=self.config.data.num_workers,
-            pin_memory=True,
+    """
+    Generate samples for PET dataset evaluation using FID metrics, PSNR, and SSIM.
+    
+    Parameters:
+        model: nn.Module
+            The trained diffusion model used for sampling and evaluation.
+    """
+    config = self.config
+    os.makedirs(self.args.image_folder, exist_ok=True)
+
+    print(f"Starting evaluation and saving images to: {self.args.image_folder}")
+
+    if self.args.dataset == 'PET':
+        # Assuming PET dataset loader is available
+        sample_dataset = PETDataset(
+            self.config.data.sample_dataroot,
+            self.config.data.image_size,
+            split='test'  # Split for evaluation
         )
+        print('Start evaluation on PET dataset.')
+    else:
+        raise ValueError("Unsupported dataset. Please use 'PET'.")
 
-        os.makedirs(self.args.image_folder, exist_ok=True)
+    print('The inference sample type is {}. The scheduler sampling type is {}. The number of involved time steps is {} out of 1000.'.format(
+        self.args.sample_type, self.args.scheduler_type, self.args.timesteps))
 
-        with torch.no_grad():
-            for i, batch in enumerate(data_loader):
-                lpet_images = batch["LPET"].to(self.device)  # Low-dose PET input
-                case_names = batch["case_name"]
+    sample_loader = data.DataLoader(
+        sample_dataset,
+        batch_size=config.sampling.batch_size,
+        shuffle=False,
+        num_workers=config.data.num_workers,
+        pin_memory=True
+    )
 
-                # Forward pass through the model
-                t = torch.full(
-                    (lpet_images.size(0),), self.ckpt_idx, device=self.device, dtype=torch.long
-                )
-                e = torch.randn_like(lpet_images)  # Random noise
-                x_start = model(lpet_images, t, noise=e)
-                b = self.betas  # Diffusion betas
-                # Save generated full-dose PET (FDPET) images
-                for j in range(lpet_images.size(0)):
-                    generated_img = x_start[j].detach().cpu().numpy()
-                    save_path = os.path.join(self.args.image_folder, f"{case_names[j]}_fdpet.png")
-                    save_image(generated_img, save_path)
-                    print(f"Saved FDPET image to {save_path}")
+    with torch.no_grad():
+        data_num = len(sample_dataset)
+        print('The length of the test set is:', data_num)
+        avg_psnr = 0.0
+        avg_ssim = 0.0
+        time_list = []
+
+        for batch_idx, sample in tqdm.tqdm(enumerate(sample_loader), desc="Generating and saving image samples."):
+            n = sample['LPET'].shape[0]
+
+            x = torch.randn(
+                n,
+                config.data.channels,
+                config.data.image_size,
+                config.data.image_size,
+                device=self.device,
+            )
+            x_low_res = sample['LPET'].to(self.device)  # Low-dose PET
+            x_high_res = sample['FDPET'].to(self.device)  # Ground truth full-dose PET
+            case_names = sample['case_name']
+
+            # Time sampling process
+            time_start = time.time()
+            x = self.sg_sample_image(x, x_low_res, model)
+            time_end = time.time()
+
+            # Transform back to original space
+            x = inverse_data_transform(config, x)
+            x_high_res = inverse_data_transform(config, x_high_res)
+            x_tensor = x
+            x_high_res_tensor = x_high_res
+
+            # Save generated full-dose PET (FDPET) images
+            for j in range(x_low_res.size(0)):
+                generated_img = x_tensor[j].detach().cpu()
+                save_path = os.path.join(self.args.image_folder, f"{case_names[j]}_fdpet.png")
+                tvu.save_image(generated_img, save_path)
+                print(f"Saved FDPET image to {save_path}")
+
+            # Time calculation
+            case_time = time_end - time_start
+            time_list.append(case_time)
+
+            # Optional: You can add PSNR/SSIM calculation here if required
+        avg_psnr = avg_psnr / data_num
+        avg_ssim = avg_ssim / data_num
+        avg_time = sum(time_list[1:-1]) / (len(time_list) - 2)  # Drop first and last for timing
+        #print(f'Average time per case: {avg_time}')
+        logging.info(f'Average: PSNR {avg_psnr}, SSIM {avg_ssim}, time {avg_time}')
+   
 
                 
     def sr_sample_fid(self, model):
@@ -1139,6 +1189,69 @@ class Diffusion(object):
         if last:
             x = x[0][-1]
         return x
+
+
+    def pet_sample_image(self, x_pet, x_fdpet, model, last=True):
+    """
+    Sample PET images with customizable sampling types and schedulers.
+    
+    Parameters:
+        x_pet: Tensor
+            Low-resolution PET data or input tensor.
+        x_fdpet: Tensor
+            High-resolution PET data or target tensor.
+        model: nn.Module
+            Model used for denoising or sampling.
+        last: bool, optional
+            If True, return only the final sampled image.
+
+    Returns:
+        x: Tensor
+            Sampled image(s) from the diffusion process.
+    """
+    try:
+        skip = self.args.skip
+    except AttributeError:
+        skip = 1
+
+    if self.args.sample_type == "generalized":
+        if self.args.scheduler_type == 'uniform':
+            skip = self.num_timesteps // self.args.timesteps
+            seq = range(-1, self.num_timesteps, skip)
+            seq = list(seq)
+            seq[0] = 0
+        elif self.args.scheduler_type == 'non-uniform':
+            seq = [0, 199, 399, 599, 699, 799, 849, 899, 949, 999]
+            if self.args.timesteps != 10:
+                num_1 = int(self.args.timesteps * 0.4)
+                num_2 = int(self.args.timesteps * 0.6)
+                stage_1 = np.linspace(0, 699, num_1 + 1)[:-1]
+                stage_2 = np.linspace(699, 999, num_2)
+                stage_1 = np.ceil(stage_1).astype(int)
+                stage_2 = np.ceil(stage_2).astype(int)
+                seq = np.concatenate((stage_1, stage_2))
+        else:
+            raise Exception("The scheduler type must be 'uniform' or 'non-uniform'.")
+
+        from functions.denoising import sg_generalized_steps
+
+        xs = sg_generalized_steps(x_pet, x_fdpet, seq, model, self.betas, eta=self.args.eta)
+        x = xs
+
+    elif self.args.sample_type == "ddpm_noisy":
+        skip = self.num_timesteps // self.args.timesteps
+        seq = range(0, self.num_timesteps, skip)
+
+        from functions.denoising import sg_ddpm_steps
+
+        x = sg_ddpm_steps(x_pet, x_fdpet, seq, model, self.betas)
+    else:
+        raise NotImplementedError("Only 'generalized' and 'ddpm_noisy' sample types are supported.")
+
+    if last:
+        x = x[0][-1]
+    return x
+
 
 
     def test(self):
