@@ -75,17 +75,6 @@ def sg_noise_estimation_loss(model,
     a = (1-b).cumprod(dim=0).index_select(0, t).view(-1, 1, 1, 1)
     # X_T
     x = x_gt * a.sqrt() + e * (1.0 - a).sqrt()
-    # Check the shape first
-    print(x_img.shape)  # This will give you insight into the current shape
-
-    # If the tensor has 5 dimensions, remove any extra dimensions
-    x_img = x_img.squeeze(dim = 3)  # If it has a single extra dimension, this will remove it
-    print(x_img.shape)
-    x_img = x_img.unsqueeze(1)
-    # Now, permute it if needed (to change from [batch_size, height, width, channels] to [batch_size, channels, height, width])    
-    x_img = x_img.permute(0, 3, 1, 2)
-    print(x_img.shape)
-
     output = model(torch.cat([x_img, x], dim=1), t.float())
 
     if keepdim:
