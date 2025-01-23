@@ -29,6 +29,9 @@ def noise_estimation_loss(model,
     a = (1-b).cumprod(dim=0).index_select(0, t).view(-1, 1, 1, 1)
     # X_T
     x = x0 * a.sqrt() + e * (1.0 - a).sqrt()
+    # Ensure input tensor has a single channel
+    x = x.mean(dim=1, keepdim=True)  # Convert to grayscale by averaging across channels
+
     output = model(x, t.float())
     if keepdim:
         return (e - output).square().sum(dim=(1, 2, 3))
