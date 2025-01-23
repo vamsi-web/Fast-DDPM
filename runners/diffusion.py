@@ -285,10 +285,11 @@ class Diffusion(object):
                 model.train()
                 step += 1
 
-                x_img = batch['LPET'].to(self.device)  # Low-dose PET
-                x_gt = batch['FDPET'].to(self.device)  # Full-dose PET ground truth
+                x_img = batch['LPET'].to(self.device).float()  # Low-dose PET
+                x_gt = batch['FDPET'].to(self.device).float()  # Full-dose PET ground truth
 
-                e = torch.randn_like(x_gt)
+                #e = torch.randn_like(x_gt)
+                e = torch.randn_like(x_gt, dtype=torch.float32)
                 b = self.betas
 
                 if self.args.scheduler_type == 'uniform':
@@ -315,7 +316,7 @@ class Diffusion(object):
                 idx = torch.cat([idx_1, idx_2], dim=0)[:n]
                 t = t_intervals[idx].to(self.device)
 
-                loss = loss_registry[config.model.type](model, x_img, x_gt, x_gt, t = t_intervals[idx].to(self.device), e = torch.randn_like(x_gt), b = self.betas)
+                loss = loss_registry[config.model.type](model, x_img, x_gt, x_gt, t, e, b)
 
                 tb_logger.add_scalar("loss", loss, global_step=step)
 
