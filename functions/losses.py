@@ -37,14 +37,7 @@ def noise_estimation_loss(model,
 
 
 
-def sr_noise_estimation_loss(model,
-                          x_bw: torch.Tensor,
-                          x_md: torch.Tensor,
-                          x_fw: torch.Tensor,
-                          t: torch.LongTensor,
-                          e: torch.Tensor,
-                          b: torch.Tensor,
-                          keepdim=False):
+def sr_noise_estimation_loss(model, x_bw, x_md, x_fw, t, e, b, beta_start, beta_end, num_timesteps, keepdim=False):
     # a: a_T in DDIM
     # 1-a: 1-a_T in DDIM 
     a = (1-b).cumprod(dim=0).index_select(0, t).view(-1, 1, 1, 1)
