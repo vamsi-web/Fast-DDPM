@@ -76,6 +76,9 @@ def sg_noise_estimation_loss(model,
     # X_T
     x = x_gt * a.sqrt() + e * (1.0 - a).sqrt()
     print(x_img.shape)  # Should print (batch_size, 1, 128, 128)
+    x_img = x_img.unsqueeze(1)  # Add a channel dimension (from [8, 128, 128, 128] to [8, 1, 128, 128])
+    x_img = x_img.permute(0, 3, 1, 2)  # Change shape from [8, 128, 128, 128] to [8, 128, 128, 1]
+    print(x_img.shape)  # Should be [8, 1, 128, 128]
 
     output = model(torch.cat([x_img, x], dim=1), t.float())
 
