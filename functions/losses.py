@@ -80,6 +80,7 @@ def sg_noise_estimation_loss(model,
 
     # If the tensor has 5 dimensions, remove any extra dimensions
     x_img = x_img.squeeze(dim = 3)  # If it has a single extra dimension, this will remove it
+    print(x_img.shape)
     x_img = x_img.unsqueeze(1)
     # Now, permute it if needed (to change from [batch_size, height, width, channels] to [batch_size, channels, height, width])    
     x_img = x_img.permute(0, 3, 1, 2)
