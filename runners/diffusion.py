@@ -315,9 +315,7 @@ class Diffusion(object):
                 idx = torch.cat([idx_1, idx_2], dim=0)[:n]
                 t = t_intervals[idx].to(self.device)
 
-
-                #b = torch.linspace(config.diffusion.beta_start, config.diffusion.beta_end, config.diffusion.num_diffusion_timesteps).to(self.device)
-                loss = loss_registry[config.model.type](model, x_img, x_gt, t, e, b, )
+                loss = loss_registry[config.model.type](model, x_img, x_gt, t, e, b)
 
                 tb_logger.add_scalar("loss", loss, global_step=step)
 
