@@ -50,6 +50,10 @@ def sr_noise_estimation_loss(model,
     # X_T
     x = x_md * a.sqrt() + e * (1.0 - a).sqrt()
 
+    print("x_bw shape:", x_bw.shape)
+    print("x_fw shape:", x_fw.shape)
+    print("x shape:", x.shape)
+
     output = model(torch.cat([x_bw, x_fw, x], dim=1), t.float())
     if keepdim:
         return (e - output).square().sum(dim=(1, 2, 3))
