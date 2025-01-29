@@ -317,7 +317,7 @@ class Diffusion(object):
                 t = t_intervals[idx].to(self.device)
 
                 #loss = loss_registry[config.model.type](model, x_img, x_img x_gt, t, e, b)
-                loss = loss_registry[config.model.type](model, x_img, x_gt, t, e, b)
+                loss = loss_registry[config.model.type](model, x_img, t, e, b)
                 
                 tb_logger.add_scalar("loss", loss, global_step=step)
 
