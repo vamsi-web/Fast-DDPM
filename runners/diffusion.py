@@ -291,8 +291,7 @@ class Diffusion(object):
                 #e = torch.randn_like(x_gt)
                 e = torch.randn_like(x_gt, dtype=torch.float32)
                 b = self.betas
-                print(b)
-
+    
                 if self.args.scheduler_type == 'uniform':
                     skip = self.num_timesteps // self.args.timesteps
                     t_intervals = torch.arange(-1, self.num_timesteps, skip)
