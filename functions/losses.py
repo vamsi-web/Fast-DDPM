@@ -26,6 +26,7 @@ def noise_estimation_loss(model,
                           b: torch.Tensor, keepdim=False):
     # a: a_T in DDIM
     # 1-a: 1-a_T in DDIM 
+    print(t)
     a = (1-b).cumprod(dim=0).index_select(0, t).view(-1, 1, 1, 1)
     # X_T
     x = x0 * a.sqrt() + e * (1.0 - a).sqrt()
