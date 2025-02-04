@@ -1241,7 +1241,7 @@ class Diffusion(object):
 
             from functions.denoising import sg_generalized_steps
 
-            xs = sg_generalized_steps(x_pet, x_fdpet, seq, model, self.betas, eta=self.args.eta)
+            xs = pet_generalized_steps(x_pet, x_fdpet, seq, model, self.betas, eta=self.args.eta)
             x = xs
 
         elif self.args.sample_type == "ddpm_noisy":
@@ -1250,7 +1250,7 @@ class Diffusion(object):
 
             from functions.denoising import sg_ddpm_steps
 
-            x = sg_ddpm_steps(x_pet, x_fdpet, seq, model, self.betas)
+            x = pet_ddpm_steps(x_pet, x_fdpet, seq, model, self.betas)
         else:
             raise NotImplementedError("Only 'generalized' and 'ddpm_noisy' sample types are supported.")
 
