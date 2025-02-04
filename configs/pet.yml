@@ -13,7 +13,7 @@ data:
     num_workers: 8  # Number of workers for data loading (adjust as per your system's capacity)
 
 model:
-    type: "simple"  # Assuming Super-Resolution model, adjust if your model type is different
+    type: "sg"  # Assuming Super-Resolution model, adjust if your model type is different
     in_channels: 1  # 1 for grayscale PET, 3 if you are using RGB images
     out_ch: 1  # Output channel for grayscale PET (1)
     ch: 128  # Model's internal channel size
