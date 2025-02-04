@@ -894,7 +894,7 @@ class Diffusion(object):
 
             # Time sampling process
                 time_start = time.time()
-                x = self.sg_sample_image(x, x_low_res, model)
+                x = self.pet_sample_image(x_low_res, x_high_res, model)
                 time_end = time.time()
 
             # Transform back to original space
