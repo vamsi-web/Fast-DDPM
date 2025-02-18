@@ -43,8 +43,8 @@ class PETDataset(Dataset):
             #img = np.resize(img, (128, 256, 1))  # Resize to correct height (128)
         img = img.squeeze(2)
         # Split the image into LPET and FDPET
-        lpet = img[:128, :]  # Left half (LPET)
-        fdpet = img[128:, :]  # Right half (FDPET)
+        lpet = img[:128, :, :]  # Left half (LPET)
+        fdpet = img[128:, :, :]  # Right half (FDPET)
 
         # Resize and normalize
         transform = transforms.Compose([
