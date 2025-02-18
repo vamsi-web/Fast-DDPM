@@ -32,10 +32,10 @@ class PETDataset(Dataset):
 
         # Assuming the data is stored under the key 'image'
         img = mat_data['img']  # Replace 'image' with the appropriate key if different
-        if img.ndim == 2:  # Ensure it's 3D (H, W, C)
-            img = np.expand_dims(img, axis=-1)
-            img = np.transpose(img, (1, 2, 0))
-
+        #if img.ndim == 2:  # Ensure it's 3D (H, W, C)
+            #img = np.expand_dims(img, axis=-1)
+            #img = np.transpose(img, (1, 2, 0))
+        img = np.transpose(img, (1, 2, 0))
         # Fixing the shape for images of size (1, 256, 128)
         # Reshaping or resizing the image to ensure it has the correct shape (H, 256, 1)
         h, w, c = img.shape
