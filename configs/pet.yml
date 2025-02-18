@@ -53,7 +53,7 @@ sampling_fid:
     last_only: True  # Using only the last checkpoint
 
 optim:
-    weight_decay: 0.000001  # Weight decay regularization (adjust as needed)
+    weight_decay: 0.000  # Weight decay regularization (adjust as needed)
     optimizer: "Adam"  # Optimizer type (Adam is commonly used)
     lr: 0.00002  # Learning rate for Adam optimizer
     beta1: 0.9  # Adam beta1 parameter
