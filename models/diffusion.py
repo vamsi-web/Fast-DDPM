@@ -222,7 +222,7 @@ class Model(nn.Module):
         ])
 
         # downsampling
-        self.conv_in = torch.nn.Conv2d(in_channels,
+        self.conv_in = torch.nn.Conv2d(in_channels=2,
                                        self.ch,
                                        kernel_size=3,
                                        stride=1,
