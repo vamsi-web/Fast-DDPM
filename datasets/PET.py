@@ -37,13 +37,13 @@ class PETDataset(Dataset):
 
         # Fixing the shape for images of size (1, 256, 128)
         # Reshaping or resizing the image to ensure it has the correct shape (H, 256, 1)
-        h, w, c = img.shape
-        if w == 256 and c == 1 and h != 128:
-            img = np.resize(img, (128, 256, 1))  # Resize to correct height (128)
-
+        c, h, w = img.shape
+        #if w == 256 and c == 1 and h != 128:
+            #img = np.resize(img, (128, 256, 1))  # Resize to correct height (128)
+        img = img.squeeze(0)
         # Split the image into LPET and FDPET
-        lpet = img[:, :128]  # Left half (LPET)
-        fdpet = img[:, 128:]  # Right half (FDPET)
+        lpet = img[:128, :]  # Left half (LPET)
+        fdpet = img[128:, :]  # Right half (FDPET)
 
         # Resize and normalize
         transform = transforms.Compose([
