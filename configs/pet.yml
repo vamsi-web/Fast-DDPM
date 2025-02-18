@@ -2,7 +2,7 @@ data:
     dataset: "LDFDPET"  # Replace "PMUB" with LDFDPET
     train_dataroot: "/kaggle/input/pet-reconstruction/train_mat/train_mat"  # Path to your LDFDPET training images
     val_dataroot: "/kaggle/input/pet-reconstruction/test_mat/test_mat"  # Path to your LDFDPET validation images
-    sample_dataroot: "/kaggle/input/pet-reconstruction/test_mat/tast_mat"  # Path to your LDFDPET test images
+    sample_dataroot: "/kaggle/input/pet-reconstruction/test_mat/test_mat"  # Path to your LDFDPET test images
     image_size: 128  # Since your images are 128x256, resize them to the desired size (e.g., 128x128 for simplicity)
     channels: 1  # If your PET images are grayscale, channels = 1. Change to 3 if you need RGB
     logit_transform: false  # Typically false for PET images; adjust based on model requirements
