@@ -24,7 +24,7 @@ class PETDataset(Dataset):
     def __len__(self):
         return len(self.image_paths)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index): 
         mat_path = self.image_paths[index]
         mat_data = sio.loadmat(mat_path)  # Load .mat file
         #if 'image' not in mat_data:
@@ -34,13 +34,14 @@ class PETDataset(Dataset):
         img = mat_data['img']  # Replace 'image' with the appropriate key if different
         if img.ndim == 2:  # Ensure it's 3D (H, W, C)
             img = np.expand_dims(img, axis=-1)
+            img = np.transpose(img, (1, 2, 0))
 
         # Fixing the shape for images of size (1, 256, 128)
         # Reshaping or resizing the image to ensure it has the correct shape (H, 256, 1)
-        c, h, w = img.shape
+        h, w, c = img.shape
         #if w == 256 and c == 1 and h != 128:
             #img = np.resize(img, (128, 256, 1))  # Resize to correct height (128)
-        img = img.squeeze(0)
+        img = img.squeeze(2)
         # Split the image into LPET and FDPET
         lpet = img[:128, :]  # Left half (LPET)
         fdpet = img[128:, :]  # Right half (FDPET)
