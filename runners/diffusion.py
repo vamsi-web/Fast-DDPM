@@ -269,7 +269,15 @@ class Diffusion(object):
 
         start_epoch, step = 0, 0
         if self.args.resume_training:
-            states = torch.load(os.path.join(self.args.log_path, "ckpt.pth"))
+            #states = torch.load(os.path.join(self.args.log_path, "ckpt.pth"))
+            checkpoint_path = "/kaggle/working/pet_train_model.pth/logs/pet_train_model.pth/ckpt.pth"
+
+            if os.path.exists(checkpoint_path):
+                print(f"Loading checkpoint from {checkpoint_path}")
+                states = torch.load(checkpoint_path, map_location="cuda" if torch.cuda.is_available() else "cpu")
+            else:
+               raise FileNotFoundError(f"Checkpoint not found at {checkpoint_path}")
+
             model.load_state_dict(states[0])
 
             states[1]["param_groups"][0]["eps"] = self.config.optim.eps
