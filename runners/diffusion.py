@@ -270,7 +270,7 @@ class Diffusion(object):
         start_epoch, step = 0, 0
         if self.args.resume_training:
             #states = torch.load(os.path.join(self.args.log_path, "ckpt.pth"))
-            checkpoint_path = "/kaggle/working/exp/logs/Fast-DDPM_experiments/logs/pet_train_model.pth/ckpt_1.pth"
+            checkpoint_path = "/kaggle/working/exp/logs/Fast-DDPM_experiments/logs/pet_train_model.pth/ckpt.pth"
 
             if os.path.exists(checkpoint_path):
                 print(f"Loading checkpoint from {checkpoint_path}")
