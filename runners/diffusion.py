@@ -231,138 +231,138 @@ class Diffusion(object):
                     torch.save(states, os.path.join(self.args.log_path, "ckpt.pth"))
 
    def pet_train(self):
-    """
-    Train the model on the PET dataset.
-    """
-    args, config = self.args, self.config
-    tb_logger = self.config.tb_logger
+        """
+        Train the model on the PET dataset.
+        """
+        args, config = self.args, self.config
+        tb_logger = self.config.tb_logger
 
-    # Load PET dataset
-    if self.args.dataset == 'PET':
-        dataset = PETDataset(self.config.data.train_dataroot, self.config.data.image_size, split='train')
-        print('Start training your Fast-DDPM model on PET dataset.')
-    else:
-        raise ValueError("Unsupported dataset. Please use 'PET'.")
-
-    print(f"The scheduler sampling type is {self.args.scheduler_type}. "
-          f"The number of involved time steps is {self.args.timesteps} out of 1000.")
-
-    train_loader = data.DataLoader(
-        dataset,
-        batch_size=config.training.batch_size,
-        shuffle=True,
-        num_workers=config.data.num_workers,
-        pin_memory=True
-    )
-
-    model = Model(config).to(self.device)
-    model = torch.nn.DataParallel(model)
-    optimizer = get_optimizer(self.config, model.parameters())
-
-    if self.config.model.ema:
-        ema_helper = EMAHelper(mu=self.config.model.ema_rate)
-        ema_helper.register(model)
-    else:
-        ema_helper = None
-
-    start_epoch, step = 0, 0
-    checkpoint_path = os.path.join(self.args.log_path, "ckpt.pth")
-
-    # ✅ Check if resuming training
-    if self.args.resume_training:
-        if os.path.exists(checkpoint_path):
-            print(f"✅ Loading checkpoint from {checkpoint_path}")
-
-            # ✅ Load checkpoint properly
-            checkpoint = torch.load(checkpoint_path, map_location="cuda" if torch.cuda.is_available() else "cpu")
-
-            if isinstance(checkpoint, dict):
-                model.load_state_dict(checkpoint["model_state_dict"])
-                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-                start_epoch = checkpoint.get("epoch", 0)
-                step = checkpoint.get("step", 0)
-
-                if self.config.model.ema and "ema_state_dict" in checkpoint:
-                    ema_helper.load_state_dict(checkpoint["ema_state_dict"])
-
-                print(f"✅ Resuming training from Epoch {start_epoch}, Step {step}")
-
-            else:
-                raise ValueError(f"🚨 Invalid checkpoint format. Expected dict, got {type(checkpoint)}")
+        # Load PET dataset
+        if self.args.dataset == 'PET':
+            dataset = PETDataset(self.config.data.train_dataroot, self.config.data.image_size, split='train')
+            print('Start training your Fast-DDPM model on PET dataset.')
         else:
-            print("🚨 No checkpoint found. Starting training from scratch.")
+            raise ValueError("Unsupported dataset. Please use 'PET'.")
 
-    for epoch in range(start_epoch, self.config.training.n_epochs):
-        for i, batch in enumerate(train_loader):
-            n = batch['LPET'].size(0)
-            model.train()
-            step += 1
+        print(f"The scheduler sampling type is {self.args.scheduler_type}. "
+              f"The number of involved time steps is {self.args.timesteps} out of 1000.")
 
-            x_img = batch['LPET'].to(self.device).float()  # Low-dose PET
-            x_gt = batch['FDPET'].to(self.device).float()  # Full-dose PET ground truth
+        train_loader = data.DataLoader(
+            dataset,
+            batch_size=config.training.batch_size,
+            shuffle=True,
+            num_workers=config.data.num_workers,
+            pin_memory=True
+        )
 
-            e = torch.randn_like(x_gt, dtype=torch.float32)
-            b = self.betas
+        model = Model(config).to(self.device)
+        model = torch.nn.DataParallel(model)
+        optimizer = get_optimizer(self.config, model.parameters())
 
-            if self.args.scheduler_type == 'uniform':
-                skip = self.num_timesteps // self.args.timesteps
-                t_intervals = torch.arange(-1, self.num_timesteps, skip)
-                t_intervals[0] = 0
-            elif self.args.scheduler_type == 'non-uniform':
-                t_intervals = torch.tensor([0, 199, 399, 599, 699, 799, 849, 899, 949, 999])
-                if self.args.timesteps != 10:
-                    num_1 = int(self.args.timesteps * 0.4)
-                    num_2 = int(self.args.timesteps * 0.6)
-                    stage_1 = torch.linspace(0, 699, num_1 + 1)[:-1]
-                    stage_2 = torch.linspace(699, 999, num_2)
-                    stage_1 = torch.ceil(stage_1).long()
-                    stage_2 = torch.ceil(stage_2).long()
-                    t_intervals = torch.cat((stage_1, stage_2))
+        if self.config.model.ema:
+            ema_helper = EMAHelper(mu=self.config.model.ema_rate)
+            ema_helper.register(model)
+        else:
+            ema_helper = None
+
+        start_epoch, step = 0, 0
+        checkpoint_path = os.path.join(self.args.log_path, "ckpt.pth")
+
+        # ✅ Check if resuming training
+        if self.args.resume_training:
+            if os.path.exists(checkpoint_path):
+                print(f"✅ Loading checkpoint from {checkpoint_path}")
+
+                # ✅ Load checkpoint properly
+                checkpoint = torch.load(checkpoint_path, map_location="cuda" if torch.cuda.is_available() else "cpu")
+
+                if isinstance(checkpoint, dict):
+                    model.load_state_dict(checkpoint["model_state_dict"])
+                    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+                    start_epoch = checkpoint.get("epoch", 0)
+                    step = checkpoint.get("step", 0)
+
+                    if self.config.model.ema and "ema_state_dict" in checkpoint:
+                        ema_helper.load_state_dict(checkpoint["ema_state_dict"])
+
+                    print(f"✅ Resuming training from Epoch {start_epoch}, Step {step}")
+
+                else:
+                    raise ValueError(f"🚨 Invalid checkpoint format. Expected dict, got {type(checkpoint)}")
             else:
-                raise Exception("The scheduler type is either uniform or non-uniform.")
+                print("🚨 No checkpoint found. Starting training from scratch.")
 
-            # Antithetic sampling
-            idx_1 = torch.randint(0, len(t_intervals), size=(n // 2 + 1,))
-            idx_2 = len(t_intervals) - idx_1 - 1
-            idx = torch.cat([idx_1, idx_2], dim=0)[:n]
-            t = t_intervals[idx].to(self.device)
+        for epoch in range(start_epoch, self.config.training.n_epochs):
+            for i, batch in enumerate(train_loader):
+                n = batch['LPET'].size(0)
+                model.train()
+                step += 1
 
-            loss = loss_registry[config.model.type](model, x_img, x_gt, t, e, b)
+                x_img = batch['LPET'].to(self.device).float()  # Low-dose PET
+                x_gt = batch['FDPET'].to(self.device).float()  # Full-dose PET ground truth
 
-            tb_logger.add_scalar("loss", loss, global_step=step)
-            logging.info(f"step: {step}, loss: {loss.item()}")
+                e = torch.randn_like(x_gt, dtype=torch.float32)
+                b = self.betas
 
-            optimizer.zero_grad()
-            loss.backward()
+                if self.args.scheduler_type == 'uniform':
+                    skip = self.num_timesteps // self.args.timesteps
+                    t_intervals = torch.arange(-1, self.num_timesteps, skip)
+                    t_intervals[0] = 0
+                elif self.args.scheduler_type == 'non-uniform':
+                    t_intervals = torch.tensor([0, 199, 399, 599, 699, 799, 849, 899, 949, 999])
+                    if self.args.timesteps != 10:
+                        num_1 = int(self.args.timesteps * 0.4)
+                        num_2 = int(self.args.timesteps * 0.6)
+                        stage_1 = torch.linspace(0, 699, num_1 + 1)[:-1]
+                        stage_2 = torch.linspace(699, 999, num_2)
+                        stage_1 = torch.ceil(stage_1).long()
+                        stage_2 = torch.ceil(stage_2).long()
+                        t_intervals = torch.cat((stage_1, stage_2))
+                else:
+                    raise Exception("The scheduler type is either uniform or non-uniform.")
 
-            try:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), config.optim.grad_clip)
-            except Exception:
-                pass
-            optimizer.step()
+                # Antithetic sampling
+                idx_1 = torch.randint(0, len(t_intervals), size=(n // 2 + 1,))
+                idx_2 = len(t_intervals) - idx_1 - 1
+                idx = torch.cat([idx_1, idx_2], dim=0)[:n]
+                t = t_intervals[idx].to(self.device)
 
-            if self.config.model.ema:
-                ema_helper.update(model)
+                loss = loss_registry[config.model.type](model, x_img, x_gt, t, e, b)
 
-            # ✅ Save checkpoints at regular intervals
-            if step % self.config.training.snapshot_freq == 0 or step == 1:
-                checkpoint_path = os.path.join(self.args.log_path, "ckpt.pth")
-                checkpoint_step_path = os.path.join(self.args.log_path, f"ckpt_{step}.pth")
+                tb_logger.add_scalar("loss", loss, global_step=step)
+                logging.info(f"step: {step}, loss: {loss.item()}")
 
-                save_data = {
-                    "epoch": epoch,
-                    "step": step,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                }
+                optimizer.zero_grad()
+                loss.backward()
+
+                try:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.optim.grad_clip)
+                except Exception:
+                    pass
+                optimizer.step()
 
                 if self.config.model.ema:
-                    save_data["ema_state_dict"] = ema_helper.state_dict()
+                    ema_helper.update(model)
 
-                torch.save(save_data, checkpoint_path)
-                torch.save(save_data, checkpoint_step_path)
+                # ✅ Save checkpoints at regular intervals
+                if step % self.config.training.snapshot_freq == 0 or step == 1:
+                    checkpoint_path = os.path.join(self.args.log_path, "ckpt.pth")
+                    checkpoint_step_path = os.path.join(self.args.log_path, f"ckpt_{step}.pth")
 
-                print(f"✅ Checkpoint saved: Epoch {epoch}, Step {step}")
+                    save_data = {
+                        "epoch": epoch,
+                        "step": step,
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict(),
+                    }
+
+                    if self.config.model.ema:
+                        save_data["ema_state_dict"] = ema_helper.state_dict()
+
+                    torch.save(save_data, checkpoint_path)
+                    torch.save(save_data, checkpoint_step_path)
+
+                    print(f"✅ Checkpoint saved: Epoch {epoch}, Step {step}")
 
 
                     
