@@ -230,7 +230,7 @@ class Diffusion(object):
                     )
                     torch.save(states, os.path.join(self.args.log_path, "ckpt.pth"))
 
-   def pet_train(self):
+def pet_train(self):
         """
         Train the model on the PET dataset.
         """
