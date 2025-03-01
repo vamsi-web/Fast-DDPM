@@ -356,11 +356,23 @@ class Diffusion(object):
                     if self.config.model.ema:
                         states.append(ema_helper.state_dict())
 
-                    torch.save(
-                        states,
-                        os.path.join(self.args.log_path, "ckpt_{}.pth".format(step)),
-                    )
-                    torch.save(states, os.path.join(self.args.log_path, "ckpt.pth"))
+                    checkpoint_path = os.path.join(self.args.log_path, "ckpt.pth")
+                    checkpoint_step_path = os.path.join(self.args.log_path, "ckpt_{}.pth".format(step))
+
+                    torch.save({
+                        "epoch": epoch,  # Ensure this variable exists
+                        "step": step,  # Track current training step
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict()
+                    }, checkpoint_path)
+
+                    torch.save({
+                        "epoch": epoch,
+                        "step": step,
+                        "model_state_dict": model.state_dict(),
+                        "optimizer_state_dict": optimizer.state_dict()
+                    }, checkpoint_step_path)
+
 
 
                     
