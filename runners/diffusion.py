@@ -25,7 +25,13 @@ import torchvision.utils as tvu
 import torchvision
 from PIL import Image
 
-
+def get_latest_checkpoint(log_path):
+    checkpoints = glob.glob(os.path.join(log_path, "ckpt_*.pth"))  # Find all checkpoints
+    if not checkpoints:
+        return None  # No checkpoint found
+    latest_checkpoint = max(checkpoints, key=os.path.getctime)  # Get the latest by creation time
+    return latest_checkpoint
+    
 def torch2hwcuint8(x, clip=False):
     if clip:
         x = torch.clamp(x, -1, 1)
@@ -266,31 +272,38 @@ class Diffusion(object):
             ema_helper = None
 
         start_epoch, step = 0, 0
-        checkpoint_path = os.path.join(self.args.log_path, "ckpt.pth")
+        # ✅ First check ckpt.pth, otherwise find latest checkpoint
+    checkpoint_path = os.path.join(self.args.log_path, "ckpt.pth")
+    latest_checkpoint = get_latest_checkpoint(self.args.log_path) if not os.path.exists(checkpoint_path) else checkpoint_path
 
-        # ✅ Check if resuming training
-        if self.args.resume_training:
-            if os.path.exists(checkpoint_path):
-                print(f"✅ Loading checkpoint from {checkpoint_path}")
+    # ✅ Check if resuming training
+    if self.args.resume_training and latest_checkpoint:
+        print(f"✅ Loading checkpoint from {latest_checkpoint}")
 
-                # ✅ Load checkpoint properly
-                checkpoint = torch.load(checkpoint_path, map_location="cuda" if torch.cuda.is_available() else "cpu")
+        try:
+            # ✅ Load checkpoint properly
+            checkpoint = torch.load(latest_checkpoint, map_location="cuda" if torch.cuda.is_available() else "cpu")
 
-                if isinstance(checkpoint, dict):
-                    model.load_state_dict(checkpoint["model_state_dict"])
-                    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-                    start_epoch = checkpoint.get("epoch", 0)
-                    step = checkpoint.get("step", 0)
+            if isinstance(checkpoint, dict):
+                model.load_state_dict(checkpoint["model_state_dict"])
+                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+                start_epoch = checkpoint.get("epoch", 0)
+                step = checkpoint.get("step", 0)
 
-                    if self.config.model.ema and "ema_state_dict" in checkpoint:
-                        ema_helper.load_state_dict(checkpoint["ema_state_dict"])
+                if self.config.model.ema and "ema_state_dict" in checkpoint:
+                    ema_helper.load_state_dict(checkpoint["ema_state_dict"])
 
-                    print(f"✅ Resuming training from Epoch {start_epoch}, Step {step}")
+                print(f"✅ Resumed training from Epoch {start_epoch}, Step {step}")
 
-                else:
-                    raise ValueError(f"🚨 Invalid checkpoint format. Expected dict, got {type(checkpoint)}")
             else:
-                print("🚨 No checkpoint found. Starting training from scratch.")
+                raise ValueError(f"🚨 Invalid checkpoint format. Expected dict, got {type(checkpoint)}")
+
+        except Exception as e:
+            print(f"🚨 Error loading checkpoint: {e}. Starting from scratch.")
+            start_epoch, step = 0, 0  # Reset if loading fails
+
+    else:
+        print("🚨 No checkpoint found. Starting training from scratch.")
 
         for epoch in range(start_epoch, self.config.training.n_epochs):
             for i, batch in enumerate(train_loader):
