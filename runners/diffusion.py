@@ -25,13 +25,7 @@ import torchvision.utils as tvu
 import torchvision
 from PIL import Image
 
-def get_latest_checkpoint(log_path):
-    checkpoints = glob.glob(os.path.join(log_path, "ckpt_*.pth"))  # Find all checkpoints
-    if not checkpoints:
-        return None  # No checkpoint found
-    latest_checkpoint = max(checkpoints, key=os.path.getctime)  # Get the latest by creation time
-    return latest_checkpoint
-    
+
 def torch2hwcuint8(x, clip=False):
     if clip:
         x = torch.clamp(x, -1, 1)
@@ -261,8 +255,10 @@ class Diffusion(object):
             pin_memory=True
         )
 
-        model = Model(config).to(self.device)
+        model = Model(config)
+        model = model.to(self.device)
         model = torch.nn.DataParallel(model)
+
         optimizer = get_optimizer(self.config, model.parameters())
 
         if self.config.model.ema:
@@ -272,38 +268,18 @@ class Diffusion(object):
             ema_helper = None
 
         start_epoch, step = 0, 0
-        # ✅ First check ckpt.pth, otherwise find latest checkpoint
-        checkpoint_path = os.path.join(self.args.log_path, "ckpt.pth")
-        latest_checkpoint = get_latest_checkpoint(self.args.log_path) if not os.path.exists(checkpoint_path) else checkpoint_path
+        if self.args.resume_training:
+            states = torch.load(os.path.join(self.args.log_path, "logs/pet_train_model.pth/ckpt_100.pth"))
+            print(f"✅ Loading checkpoint from latest_checkpoint")
+            model.load_state_dict(states[0])
 
-        # ✅ Check if resuming training
-        if self.args.resume_training and latest_checkpoint:
-            print(f"✅ Loading checkpoint from {latest_checkpoint}")
-
-            try:
-                # ✅ Load checkpoint properly
-                checkpoint = torch.load(latest_checkpoint, map_location="cuda" if torch.cuda.is_available() else "cpu")
-
-                if isinstance(checkpoint, dict):
-                    model.load_state_dict(checkpoint["model_state_dict"])
-                    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-                    start_epoch = checkpoint.get("epoch", 0)
-                    step = checkpoint.get("step", 0)
-
-                    if self.config.model.ema and "ema_state_dict" in checkpoint:
-                        ema_helper.load_state_dict(checkpoint["ema_state_dict"])
-
-                    print(f"✅ Resumed training from Epoch {start_epoch}, Step {step}")
-
-                else:
-                    raise ValueError(f"🚨 Invalid checkpoint format. Expected dict, got {type(checkpoint)}")
-
-            except Exception as e:
-                print(f"🚨 Error loading checkpoint: {e}. Starting from scratch.")
-                start_epoch, step = 0, 0  # Reset if loading fails
-
-        else:
-            print("🚨 No checkpoint found. Starting training from scratch.")
+            states[1]["param_groups"][0]["eps"] = self.config.optim.eps
+            optimizer.load_state_dict(states[1])
+            start_epoch = states[2]
+            step = states[3]
+            print(f"✅ Resumed training from Epoch {start_epoch}, Step {step}")
+            if self.config.model.ema:
+                ema_helper.load_state_dict(states[4])
 
         for epoch in range(start_epoch, self.config.training.n_epochs):
             for i, batch in enumerate(train_loader):
@@ -314,15 +290,17 @@ class Diffusion(object):
                 x_img = batch['LPET'].to(self.device).float()  # Low-dose PET
                 x_gt = batch['FDPET'].to(self.device).float()  # Full-dose PET ground truth
 
+                #e = torch.randn_like(x_gt)
                 e = torch.randn_like(x_gt, dtype=torch.float32)
                 b = self.betas
-
+    
                 if self.args.scheduler_type == 'uniform':
                     skip = self.num_timesteps // self.args.timesteps
                     t_intervals = torch.arange(-1, self.num_timesteps, skip)
                     t_intervals[0] = 0
                 elif self.args.scheduler_type == 'non-uniform':
                     t_intervals = torch.tensor([0, 199, 399, 599, 699, 799, 849, 899, 949, 999])
+                
                     if self.args.timesteps != 10:
                         num_1 = int(self.args.timesteps * 0.4)
                         num_2 = int(self.args.timesteps * 0.6)
@@ -340,16 +318,21 @@ class Diffusion(object):
                 idx = torch.cat([idx_1, idx_2], dim=0)[:n]
                 t = t_intervals[idx].to(self.device)
 
+                #loss = loss_registry[config.model.type](model, x_img, x_img x_gt, t, e, b)
+                #loss = loss_registry[config.model.type](model, x_img, t, e, b)
                 loss = loss_registry[config.model.type](model, x_img, x_gt, t, e, b)
-
+                
                 tb_logger.add_scalar("loss", loss, global_step=step)
+
                 logging.info(f"step: {step}, loss: {loss.item()}")
 
                 optimizer.zero_grad()
                 loss.backward()
 
                 try:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), config.optim.grad_clip)
+                    torch.nn.utils.clip_grad_norm_(
+                        model.parameters(), config.optim.grad_clip
+                    )
                 except Exception:
                     pass
                 optimizer.step()
@@ -357,23 +340,21 @@ class Diffusion(object):
                 if self.config.model.ema:
                     ema_helper.update(model)
 
-                # ✅ Save checkpoints at regular intervals
                 if step % self.config.training.snapshot_freq == 0 or step == 1:
-                    checkpoint_path = os.path.join(self.args.log_path, "ckpt.pth")
-                    checkpoint_step_path = os.path.join(self.args.log_path, f"ckpt_{step}.pth")
-
-                    save_data = {
-                        "epoch": epoch,
-                        "step": step,
-                        "model_state_dict": model.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                    }
-
+                    states = [
+                        model.state_dict(),
+                        optimizer.state_dict(),
+                        epoch,
+                        step,
+                    ]
                     if self.config.model.ema:
-                        save_data["ema_state_dict"] = ema_helper.state_dict()
+                        states.append(ema_helper.state_dict())
 
-                    torch.save(save_data, checkpoint_path)
-                    torch.save(save_data, checkpoint_step_path)
+                    torch.save(
+                        states,
+                        os.path.join(self.args.log_path, "ckpt_{}.pth".format(step)),
+                    )
+                    torch.save(states, os.path.join(self.args.log_path, "ckpt.pth"))
 
                     print(f"✅ Checkpoint saved: Epoch {epoch}, Step {step}")
 
