@@ -25,6 +25,7 @@ import torchvision.utils as tvu
 import torchvision
 from PIL import Image
 
+
 def torch2hwcuint8(x, clip=False):
     if clip:
         x = torch.clamp(x, -1, 1)
@@ -229,7 +230,7 @@ class Diffusion(object):
                     )
                     torch.save(states, os.path.join(self.args.log_path, "ckpt.pth"))
 
-def pet_train(self):
+    def pet_train(self):
         """
         Train the model on the PET dataset.
         """
@@ -367,7 +368,7 @@ def pet_train(self):
                     
 
     # Training Fast-DDPM for tasks that have two conditions: multi image super-resolution.
-def sr_train(self):
+    def sr_train(self):
         args, config = self.args, self.config
         tb_logger = self.config.tb_logger
 
@@ -481,7 +482,7 @@ def sr_train(self):
                     torch.save(states, os.path.join(self.args.log_path, "ckpt.pth"))
 
 
-def pet_ddpm_train(self):
+    def pet_ddpm_train(self):
         args, config = self.args, self.config
         tb_logger = self.config.tb_logger
 
@@ -580,7 +581,7 @@ def pet_ddpm_train(self):
 
     
     # Training original DDPM for tasks that have only one condition: image translation and CT denoising.
-def sg_ddpm_train(self):
+    def sg_ddpm_train(self):
         args, config = self.args, self.config
         tb_logger = self.config.tb_logger
 
